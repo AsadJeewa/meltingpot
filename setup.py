@@ -75,15 +75,16 @@ class BuildPy(build_py.build_py):
 
 setuptools.setup(
     name='dm-meltingpot',
-    version=VERSION,
+    version='2.1.0',
     license='Apache 2.0',
     license_files=['LICENSE'],
     url='https://github.com/deepmind/meltingpot',
     download_url='https://github.com/deepmind/meltingpot/releases',
     author='DeepMind',
     author_email='noreply@google.com',
-    description=(
-        'A suite of test scenarios for multi-agent reinforcement learning.'),
+    description='A suite of test scenarios for multi-agent reinforcement learning.',
+    long_description=open('README.md').read(),
+    long_description_content_type='text/markdown',
     keywords='multi-agent reinforcement-learning python machine-learning',
     classifiers=[
         'Development Status :: 4 - Beta',
