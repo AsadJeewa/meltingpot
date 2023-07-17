@@ -29,6 +29,16 @@ from ml_collections import config_dict
 import numpy as np
 import pygame
 
+# ASAD DEBUG START
+import os
+import sys
+os.environ["SDL_VIDEODRIVER"] = "x11"
+
+pygame.init()
+pygame.display.init()
+print(pygame.display.list_modes()) #Get list of available fullscreen modes
+# ASAD DEBUG END
+
 import dmlab2d
 from meltingpot.utils.substrates import builder
 
@@ -180,6 +190,7 @@ class ActionReader(object):
 
   def step(self, player_prefix: str) -> Mapping[str, int]:
     """Update the actions of player `player_prefix`."""
+    #print("STEP")
     actions = {action_key: 0 for action_key in self._action_spec.keys()}
     for action_name in self._action_names:
       actions[f'{player_prefix}.{action_name}'] = self._action_map[
