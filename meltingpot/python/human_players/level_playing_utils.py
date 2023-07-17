@@ -29,6 +29,16 @@ from ml_collections import config_dict
 import numpy as np
 import pygame
 
+# ASAD DEBUG START
+import os
+import sys
+os.environ["SDL_VIDEODRIVER"] = "x11"
+
+pygame.init()
+pygame.display.init()
+print(pygame.display.list_modes()) #Get list of available fullscreen modes
+# ASAD DEBUG END
+
 import dmlab2d
 from meltingpot.python.utils.substrates import builder
 
