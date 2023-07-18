@@ -18,15 +18,16 @@ from typing import Tuple
 import dm_env
 import dmlab2d
 from gym import spaces
+from meltingpot import substrate
+from meltingpot.utils.policies import policy
 from ml_collections import config_dict
 import numpy as np
 from ray.rllib import algorithms
 from ray.rllib.env import multi_agent_env
-from ray.rllib.policy.sample_batch import DEFAULT_POLICY_ID
+from ray.rllib.policy import sample_batch
 
-from examples import utils
-from meltingpot.python import substrate
-from meltingpot.python.utils.policies import policy
+from ..gym import utils
+
 
 PLAYER_STR_FORMAT = 'player_{index}'
 
@@ -63,9 +64,9 @@ class MeltingPotEnv(multi_agent_env.MultiAgentEnv):
     timestep = self._env.reset()
     return utils.timestep_to_observations(timestep)
 
-  def step(self, action):
+  def step(self, action_dict):
     """See base class."""
-    actions = [action[agent_id] for agent_id in self._ordered_agent_ids]
+    actions = [action_dict[agent_id] for agent_id in self._ordered_agent_ids]
     timestep = self._env.step(actions)
     rewards = {
         agent_id: timestep.reward[index]
@@ -146,7 +147,7 @@ class RayModelPolicy(policy.Policy):
 
   def __init__(self,
                model: algorithms.Algorithm,
-               policy_id: str = DEFAULT_POLICY_ID) -> None:
+               policy_id: str = sample_batch.DEFAULT_POLICY_ID) -> None:
     """Initialize a policy instance.
 
     Args:

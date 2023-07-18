@@ -51,7 +51,8 @@ class BuildPy(build_py.build_py):
       urllib.request.urlretrieve(ASSETS_URL, filename=tar_file_path)
       print(f'downloaded {tar_file_path}', flush=True)
 
-    root = self.get_package_dir('meltingpot')
+    root = os.path.join(self.get_package_dir(''), 'meltingpot')
+    os.makedirs(root, exist_ok=True)
     if os.path.exists(f'{root}/assets'):
       shutil.rmtree(f'{root}/assets')
       print('deleted existing assets', flush=True)
@@ -61,7 +62,8 @@ class BuildPy(build_py.build_py):
 
   def build_assets(self):
     """Copies assets from package to build lib."""
-    package_root = self.get_package_dir('meltingpot')
+    package_root = os.path.join(self.get_package_dir(''), 'meltingpot')
+    os.makedirs(package_root, exist_ok=True)
     build_root = os.path.join(self.build_lib, 'meltingpot')
     if os.path.exists(f'{build_root}/assets'):
       shutil.rmtree(f'{build_root}/assets')
@@ -92,22 +94,26 @@ setuptools.setup(
         'Operating System :: POSIX :: Linux',
         'Operating System :: MacOS :: MacOS X',
         'Programming Language :: Python :: 3 :: Only',
+        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
         'Topic :: Scientific/Engineering :: Artificial Intelligence',
     ],
     cmdclass={'build_py': BuildPy},
-    package_dir={'meltingpot': 'meltingpot'},
+    package_dir={
+        'meltingpot': 'meltingpot/python',
+        'meltingpot.lua': 'meltingpot/lua',
+    },
     package_data={
-        'meltingpot': [
-            'lua/modules/*',
-            'lua/levels/**/*',
-        ],
+        'meltingpot.lua': ['**'],
     },
     python_requires='>=3.9',
     install_requires=[
         'absl-py',
         'chex',
         'dm_env',
-        # 'dmlab2d',  # Not yet available for PIP install.
+        'dmlab2d',
+        'dm-tree',
         'immutabledict',
         'ml-collections',
         'networkx',
@@ -119,22 +125,15 @@ setuptools.setup(
         'tensorflow-macos' if IS_M1_MAC else 'tensorflow',
     ],
     extras_require={
-        # Dependencies required for rllib example.
-        'rllib': [
-            'dm-tree',
-            'gym',
-            'ray[rllib,default]==2.0.0',
-            'numpy<1.23',  # Needed by Ray because it uses `np.bool`.
-        ],
-        # Dependencies required for pettingzoo example.
-        'pettingzoo': [
-            'dm-tree',
-            'gym',
-            'matplotlib',
-            'pettingzoo>=1.22.3',
-            'stable-baselines3',
-            'supersuit>=3.7.2',
-            'torch',
+        # Used in development.
+        'dev': [
+            'build',
+            'isort',
+            'pipreqs',
+            'pyink',
+            'pylint',
+            'pytest-xdist',
+            'pytype',
         ],
     },
 )

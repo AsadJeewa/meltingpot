@@ -13,35 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Installs meltingpot extras on Linux/macOS.
+# Tests meltingpot examples.
 
 set -euxo pipefail
 
+cd "$(dirname "$0")"
 
-function check_setup() {
-  echo -e "\nChecking meltingpot is installed..."
-  python -c 'import meltingpot'
-}
+pip install --upgrade pip
+pip install pytest-xdist
 
-
-function install_extras() {
-  echo -e "\nInstalling meltingpot extras..."
-  pip install .[rllib,pettingzoo]
-}
-
-
-function test_extras() {
-  echo -e "\nTesting meltingpot extras..."
-  # Test RLLib and Petting Zoo training scripts.
-  # TODO(b/265139141): Add PettingZoo test.
-  test_rllib
-}
-
-
-function main() {
-  check_setup
-  install_extras
-}
-
-
-main "$@"
+pytest
