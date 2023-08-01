@@ -12,3 +12,6 @@
 # Ignore saved models.
 /examples/results/
 /meltingpot/assets/
+
+#Ignore tensorboard logs
+/runs
