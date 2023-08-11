@@ -173,12 +173,14 @@ function Cleaner:__init__(kwargs)
       {'cooldownTime', args.positive},
       {'beamLength', args.positive},
       {'beamRadius', args.positive},
+      {'rewardForCleaning', args.numberType},
   })
   Cleaner.Base.__init__(self, kwargs)
 
   self._config.cooldownTime = kwargs.cooldownTime
   self._config.beamLength = kwargs.beamLength
   self._config.beamRadius = kwargs.beamRadius
+  self._config.rewardForCleaning = kwargs.rewardForCleaning
 end
 
 function Cleaner:addHits(worldConfig)
@@ -212,6 +214,7 @@ function Cleaner:registerUpdaters(updaterRegistry)
             self._coolingTimer = self._config.cooldownTime
             self.gameObject:hitBeam(
                 'cleanHit', self._config.beamLength, self._config.beamRadius)
+                self.gameObject:getComponent('Avatar'):addReward(self._config.rewardForCleaning)
           end
         end
       end
