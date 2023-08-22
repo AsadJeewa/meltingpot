@@ -145,6 +145,17 @@ def interaction_inventories(
   """
   return float64(2, num_resources, name=name)
 
+def vector_reward(
+    num_objectives: int,
+    name: Optional[str] = 'VECTOR_REWARD') -> dm_env.specs.Array:
+  """Returns the spec for an VECTOR_REWARD observation.
+
+  Args:
+    num_objectives: the number of objectives.
+    name: optional name for the spec.
+  """
+  return float64(num_objectives, name=name)
+
 
 def timestep(
     observation_spec: Mapping[str, dm_env.specs.Array]) -> dm_env.TimeStep:

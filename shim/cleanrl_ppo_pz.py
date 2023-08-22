@@ -9,8 +9,15 @@ from shimmy import MeltingPotCompatibilityV0
 from shimmy.utils.meltingpot import load_meltingpot
 from gymnasium.wrappers import GrayScaleObservation
 from pettingzoo.butterfly import pistonball_v6
+from datetime import datetime
 
+#currently based on https://github.com/vwxyzjn/cleanrl/blob/master/cleanrl/ppo_atari.py
+
+#BEGIN DEBUG
 mpot = True
+exp_name = "divergent_long_0_"+str(datetime.now())
+#END DEBUG
+
 
 class Agent(nn.Module):
     def __init__(self, num_actions):
@@ -32,6 +39,7 @@ class Agent(nn.Module):
                 nn.ReLU(),
             )
         else:
+        # MAKE CTDE
             self.network = nn.Sequential(
                 self._layer_init(nn.Conv2d(4, 32, 3, padding=1)),#pixel observations, out channels 32
                 nn.MaxPool2d(2),
@@ -66,18 +74,19 @@ class Agent(nn.Module):
         return action, probs.log_prob(action), probs.entropy(), self.critic(hidden) #actions, logprobs, _, values 
 
 
-def batchify_obs(obs, device):
-    """Converts PZ style observations to batch of torch arrays."""
+def batchify_obs(obs, device, mpot):#stack agents
+    """Converts PZ style observations to batch of torch arrays."""    
     # convert to list of np arrays
     if mpot: 
-        obs = np.stack([obs[a]['RGB'] for a in obs], axis=0)#store only values and ignore keys
+        # print(obs["player_0"]["RGB"].shape)
+        obs = np.stack([obs[a]['RGB'] for a in obs], axis=0)#each agent
+        #store only values and ignore keys
     else:
         obs = np.stack([obs[a] for a in obs], axis=0)#store only values and ignore keys
     # transpose to be (batch, channel, height, width)
     obs = obs.transpose(0, -1, 1, 2)
     # convert to torch
     obs = torch.tensor(obs).to(device)
-
     return obs
 
 
@@ -110,29 +119,33 @@ if __name__ == "__main__":
     if mpot:
         frame_size = (88, 88)
         stack_size = 3
-        num_steps = 1500 #default 1000
+        num_steps = 1000 #default 1000
     else: 
-        frame_size = (64, 64)
-        stack_size = 4
         num_steps = 125
-    total_episodes = 20
+    # frame_size = (64, 64)
+    # stack_size = 4
+   
+
+    total_episodes = 200
 
     """ ENV SETUP """
     if mpot:
         env = load_meltingpot("clean_up")
         env = MeltingPotCompatibilityV0(env, render_mode="None")
-        next_obs, info = env.reset(seed=None)
+        # next_obs, info = env.reset(seed=None)
+        # print(type(env))
+        #env = color_reduction_v0(env, 'full') # grayscale #TODO Grayscale
         #print(next_obs[list(next_obs.keys())[0]]["RGB"].shape)
         #env = GrayScaleObservation(env)
         #env = color_reduction_v0(env, 'full') # grayscale
     else:
         env = pistonball_v6.parallel_env(
-            render_mode="None", continuous=False, num_steps=num_steps
+            render_mode="None", continuous=False, max_cycles=num_steps
         )
 
-        env = color_reduction_v0(env, 'full') # grayscale
-        env = resize_v1(env, frame_size[0], frame_size[1]) # resize and stack images
-        env = frame_stack_v1(env, stack_size=stack_size)
+    env = color_reduction_v0(env, 'full') # grayscale
+    env = resize_v1(env, frame_size[0], frame_size[1]) # resize and stack images
+    env = frame_stack_v1(env, stack_size=stack_size)
 
     num_agents = len(env.possible_agents)
     num_actions = env.action_space(env.possible_agents[0]).n
@@ -165,13 +178,15 @@ if __name__ == "__main__":
 
     """ TRAINING LOGIC """
     # train for n number of episodes
-    tb = SummaryWriter()
+    tb = SummaryWriter(log_dir="runs/"+exp_name)
     for episode in range(total_episodes):
+        print("COLLECTING EXPERIENCE")
         # collect an episode
         with torch.no_grad():
             # collect observations and convert to batch of torch tensors
             next_obs, info = env.reset(seed=None)
-            
+            # print(next_obs)
+            # exit()
             # reset the episodic return
             total_episodic_return = 0
 
@@ -182,7 +197,10 @@ if __name__ == "__main__":
                 #print(step_count)
                 step_count+=1
                 # rollover the observation
-                obs = batchify_obs(next_obs, device) # for torch 
+                obs = batchify_obs(next_obs, device, mpot) # for torch 
+                # print(obs.shape)#CENTRALIZED
+                #CTCE
+                # exit()
                 # get action from the agent
                 actions, logprobs, _, values = agent.get_action_and_value(obs)
 
@@ -190,10 +208,16 @@ if __name__ == "__main__":
                 next_obs, rewards, terms, truncs, infos = env.step(
                     unbatchify(actions, env) # for PZ
                 )
+                # print(next_obs)
+                # print(infos)
+
 
                 # add to episode storage
                 rb_obs[step] = obs
-                rb_rewards[step] = batchify(rewards, device)
+                # print(rewards)
+                rb_rewards[step] = batchify(rewards, device) #each agent separate
+                # print(rb_rewards[step])
+                #exit()
                 rb_terms[step] = batchify(terms, device)
                 rb_actions[step] = actions
                 rb_logprobs[step] = logprobs
@@ -207,7 +231,6 @@ if __name__ == "__main__":
                 if any([terms[a] for a in terms]) or any([truncs[a] for a in truncs]):
                     end_step = step
                     terminated = True
-                    print("TERMINATED")
                     break
             #if not terminated:
             #    end_step = num_steps-1 #CHECK
@@ -234,16 +257,29 @@ if __name__ == "__main__":
         b_returns = torch.flatten(rb_returns[:end_step], start_dim=0, end_dim=1)
         b_values = torch.flatten(rb_values[:end_step], start_dim=0, end_dim=1)
         b_advantages = torch.flatten(rb_advantages[:end_step], start_dim=0, end_dim=1)
+        # print(rb_advantages)
+        # print(rb_advantages[:end_step])
+        # print(b_advantages)
+        # print(rb_advantages.shape)
+        # print(rb_advantages[:end_step].shape)
+        # print(b_advantages.shape)
+        # exit()
+
+        #CHECK MINIBATCH
+        #CHECK PROSOCIAL
+        #CHECK CENTRALISED
 
         #SAMPLE FROM BUFFER AND UPDATE NETWORKS (Learner)
         
         # Optimizing the policy and value network
         b_index = np.arange(len(b_obs))
         clip_fracs = []
-        for repeat in range(3):
+
+        print("TRAINING")
+        for repeat in range(3):#epochs
             # shuffle the indices we use to access the data
             np.random.shuffle(b_index)
-            for start in range(0, len(b_obs), batch_size):
+            for start in range(0, len(b_obs), batch_size):#minibatch
                 # select the indices we want to train on
                 end = start + batch_size
                 batch_index = b_index[start:end]
@@ -297,6 +333,9 @@ if __name__ == "__main__":
         y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
+
+        torch.save(agent.actor.state_dict(), "model/"+exp_name)
+        print("save")
 
         print(f"Training episode {episode}")
         print(f"Episodic Return: {np.mean(total_episodic_return)}")

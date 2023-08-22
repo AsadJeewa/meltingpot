@@ -174,6 +174,7 @@ function Cleaner:__init__(kwargs)
       {'beamLength', args.positive},
       {'beamRadius', args.positive},
       {'rewardForCleaning', args.numberType},
+      --{'rewardForCleaning', args.tableType},
   })
   Cleaner.Base.__init__(self, kwargs)
 
@@ -360,6 +361,7 @@ function Edible:__init__(kwargs)
       {'name', args.default('Edible')},
       {'liveState', args.stringType},
       {'waitState', args.stringType},
+      --{'rewardForEating', args.tableType},
       {'rewardForEating', args.numberType},
   })
   Edible.Base.__init__(self, kwargs)
@@ -391,6 +393,7 @@ function Edible:getLiveState()
 end
 
 function Edible:onEnter(enteringGameObject, contactName)
+  vector_reward(1):fill(self._config.rewardForEating)
   if contactName == 'avatar' then
     if self.gameObject:getState() == self._liveState then
       -- Reward the player who ate the edible.
@@ -401,6 +404,9 @@ function Edible:onEnter(enteringGameObject, contactName)
           self._config.rewardForEating)
       else
         avatarComponent:addReward(self._config.rewardForEating)
+        local playerIndex = avatarComponent:getIndex()
+        local vector_reward = enteringGameObject:getComponent('AllNonselfCumulants'):getPlayerVectorRewards(playerIndex)
+        vector_reward(1):fill(self._config.rewardForEating)
       end
       events:add('edible_consumed', 'dict',
                  'player_index', avatarComponent:getIndex())  -- int
@@ -438,6 +444,9 @@ function Taste:registerUpdaters(updaterRegistry)
 end
 
 function Taste:cleaned()
+  local playerIndex = self.gameObject:getComponent('Avatar'):getIndex()
+  local vector_reward = self.gameObject:getComponent('AllNonselfCumulants'):getPlayerVectorRewards(playerIndex)
+  vector_reward(2):fill(self._config.rewardAmount)
   if self._config.role == 'cleaner' then
     self.gameObject:getComponent('Avatar'):addReward(self._config.rewardAmount)
   end
@@ -451,12 +460,33 @@ function Taste:consumed(edibleDefaultReward)
     self.gameObject:getComponent('Avatar'):addReward(0.0)
   elseif self._config.role == 'consumer' then
     self.gameObject:getComponent('Avatar'):addReward(self._config.rewardAmount)
+    local playerIndex = enteringGameObject:getComponent('Avatar'):getIndex()
+    local vector_reward = self.gameObject:getComponent('AllNonselfCumulants'):getPlayerVectorRewards(playerIndex)
+    vector_reward(2):fill(self._config.rewardAmount)
   else
     self.gameObject:getComponent('Avatar'):addReward(edibleDefaultReward)
   end
   self:setCumulant()
 end
 
+function Taste:addObservations(tileSet, world, observations)
+  local playerIdx = self.gameObject:getComponent('Avatar'):getIndex()
+  local stringPlayerIdx = tostring(playerIdx)
+  local sceneObject = self.gameObject.simulation:getSceneObject()
+  local globalData = sceneObject:getComponent('GlobalData')
+  local numObjectives = globalData:getNumObjectives()
+
+  -- print(self.gameObject:getComponent('AllNonselfCumulants'):getPlayerVectorRewards(playerIdx))--ISSUE
+  observations[#observations + 1] = {
+  name = stringPlayerIdx .. '.VECTOR_REWARD',
+  type = 'tensor.DoubleTensor',
+  shape = {numObjectives},
+  func = function(grid)
+    return self.gameObject:getComponent('AllNonselfCumulants'):getPlayerVectorRewards(playerIdx)
+  end
+  }
+end
+  
 function Taste:setCumulant()
   self.player_ate_apple = self.player_ate_apple + 1
 
@@ -472,8 +502,14 @@ local GlobalData = class.Class(component.Component)
 function GlobalData:__init__(kwargs)
   kwargs = args.parse(kwargs, {
       {'name', args.default('GlobalData')},
+      {'numObjectives', args.default(2), args.numberType},
   })
   GlobalData.Base.__init__(self, kwargs)
+  self._config.numObjectives = kwargs.numObjectives
+end
+
+function GlobalData:getNumObjectives()
+  return self._config.numObjectives
 end
 
 function GlobalData:reset()
@@ -481,7 +517,7 @@ function GlobalData:reset()
 
   self.playersWhoCleanedThisStep = tensor.Tensor(numPlayers):fill(0)
   self.playersWhoAteThisStep = tensor.Tensor(numPlayers):fill(0)
-end
+  end
 
 function GlobalData:registerUpdaters(updaterRegistry)
   local function resetCumulants()
@@ -522,6 +558,15 @@ function AllNonselfCumulants:reset()
 
   self.num_others_who_cleaned_this_step = 0
   self.num_others_who_ate_this_step = 0
+
+  self.playerVectorRewards = tensor.DoubleTensor(
+      self.gameObject.simulation:getNumPlayers(),
+      self.gameObject.simulation:getSceneObject():getComponent('GlobalData'):getNumObjectives())--ISSUE
+  self.playerVectorRewards:fill(0)
+end
+
+function AllNonselfCumulants:getPlayerVectorRewards(playerIndex)
+  return self.playerVectorRewards(playerIndex)
 end
 
 function AllNonselfCumulants:sumNonself(vector)
@@ -551,6 +596,9 @@ function AllNonselfCumulants:registerUpdaters(updaterRegistry)
     self.num_others_who_cleaned_this_step = 0
     self.num_others_who_ate_this_step = 0
     self._tmpTensor:fill(0)
+    local playerIndex = self.gameObject:getComponent('Avatar'):getIndex()
+    local vector_reward = self.gameObject:getComponent('AllNonselfCumulants'):getPlayerVectorRewards(playerIndex)
+    vector_reward:fill(0)
   end
 
   updaterRegistry:registerUpdater{
@@ -560,7 +608,7 @@ function AllNonselfCumulants:registerUpdaters(updaterRegistry)
 end
 
 
-local allComponents = {
+local allComponents = { -- CHECK
     -- Non-avatar components.
     AppleGrow = AppleGrow,
     DirtTracker = DirtTracker,

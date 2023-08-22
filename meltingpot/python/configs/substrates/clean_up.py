@@ -351,6 +351,9 @@ SPAWN_POINT = {
     ]
 }
 
+reward = {}
+reward["eat"] = 1.0
+reward["clean"] = 0.0
 POTENTIAL_APPLE = {
     "name": "potentialApple",
     "components": [
@@ -392,6 +395,7 @@ POTENTIAL_APPLE = {
             "kwargs": {
                 "liveState": "apple",
                 "waitState": "appleWait",
+                # "rewardForEating": reward,
                 "rewardForEating": 1.0,
             }
         },
@@ -817,6 +821,7 @@ def get_config():
       "READY_TO_SHOOT",
       # Global switching signals for puppeteers.
       "NUM_OTHERS_WHO_CLEANED_THIS_STEP",
+      "VECTOR_REWARD",
   ]
   config.global_observation_names = [
       "WORLD.RGB",
@@ -831,6 +836,7 @@ def get_config():
       "NUM_OTHERS_WHO_CLEANED_THIS_STEP": specs.float64(),
       # Debug only (do not use the following observations in policies).
       "WORLD.RGB": specs.rgb(168, 240),
+      "VECTOR_REWARD": specs.vector_reward(2),
   })
 
   # The roles assigned to each player.
