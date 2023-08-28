@@ -736,7 +736,7 @@ def create_avatar_object(player_idx: int,
               "component": "Taste",
               "kwargs": {
                   "role": "free",
-                  "rewardAmount": 1,
+                  "rewardAmount": 1,#vector reward
               }
           },
           {

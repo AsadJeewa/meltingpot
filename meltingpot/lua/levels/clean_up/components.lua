@@ -393,7 +393,6 @@ function Edible:getLiveState()
 end
 
 function Edible:onEnter(enteringGameObject, contactName)
-  vector_reward(1):fill(self._config.rewardForEating)
   if contactName == 'avatar' then
     if self.gameObject:getState() == self._liveState then
       -- Reward the player who ate the edible.
@@ -404,6 +403,7 @@ function Edible:onEnter(enteringGameObject, contactName)
           self._config.rewardForEating)
       else
         avatarComponent:addReward(self._config.rewardForEating)
+        print("EAT!!!!!!")
         local playerIndex = avatarComponent:getIndex()
         local vector_reward = enteringGameObject:getComponent('AllNonselfCumulants'):getPlayerVectorRewards(playerIndex)
         vector_reward(1):fill(self._config.rewardForEating)
@@ -448,7 +448,7 @@ function Taste:cleaned()
   local vector_reward = self.gameObject:getComponent('AllNonselfCumulants'):getPlayerVectorRewards(playerIndex)
   vector_reward(2):fill(self._config.rewardAmount)
   if self._config.role == 'cleaner' then
-    self.gameObject:getComponent('Avatar'):addReward(self._config.rewardAmount)
+    self.gameObject:getComponent('Avatar'):addReward(self._config.rewardAmount) --not used as free role
   end
   if self._config.role == 'consumer' then
     self.gameObject:getComponent('Avatar'):addReward(0.0)

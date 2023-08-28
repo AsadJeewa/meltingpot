@@ -11,11 +11,9 @@ from gymnasium.wrappers import GrayScaleObservation
 from pettingzoo.butterfly import pistonball_v6
 from datetime import datetime
 
-#currently based on https://github.com/vwxyzjn/cleanrl/blob/master/cleanrl/ppo_atari.py
-
 #BEGIN DEBUG
 mpot = True
-exp_name = "super_divergent_0_"+str(datetime.now())
+exp_name = "ctde_divergent_0_"+str(datetime.now())
 prosocial = False
 #END DEBUG
 
@@ -63,16 +61,26 @@ class Agent(nn.Module):
         torch.nn.init.constant_(layer.bias, bias_const)
         return layer
 
-    def get_value(self, x):
+    def get_values(self, x):
         return self.critic(self.network(x / 255.0))# get value of state for each agent
 
-    def get_action_and_value(self, x, action=None):
-        hidden = self.network(x / 255.0)
-        logits = self.actor(hidden) #probabilities
-        probs = Categorical(logits=logits) # create a distribution
-        if action is None:
-            action = probs.sample()
-        return action, probs.log_prob(action), probs.entropy(), self.critic(hidden) #actions, logprobs, _, values 
+    def get_actions_and_values(self, x, num_agents, actions=None):
+        # x is combined observations
+        if actions is None:
+            actions = torch.zeros(num_agents)#.to(device)
+        hidden_all = self.network(x / 255.0)
+        #TODO Add param for parameter sharing
+        for i in range(num_agents):
+            hidden = hidden_all[i]
+            logits = self.actor(hidden) #probabilities
+            probs = Categorical(logits=logits) # create a distribution
+            if actions is None:
+                action = probs.sample()
+                actions[i] = action
+        actions = actions.int()
+        if not torch.all(actions == actions[0]):
+            print("DIFF: ",actions)
+        return actions, probs.log_prob(actions), probs.entropy(), self.critic(hidden_all) #actions, logprobs, _, values 
 
 
 def batchify_obs(obs, device, mpot):#stack agents
@@ -188,7 +196,8 @@ if __name__ == "__main__":
             # collect observations and convert to batch of torch tensors
             next_obs, info = env.reset(seed=None)
             # reset the episodic return
-            total_episodic_return = 0            
+            total_episodic_return = 0
+            
             # each episode has num_steps
             terminated = False
             for step in range(0, num_steps):
@@ -196,14 +205,13 @@ if __name__ == "__main__":
                 # rollover the observation
                 obs = batchify_obs(next_obs, device, mpot) # for torch 
                 # get action from the agent
-                actions, logprobs, _, values = agent.get_action_and_value(obs)
+                actions, logprobs, _, values = agent.get_actions_and_values(obs, num_agents)
                 # execute the environment and log data
                 next_obs, rewards, terms, truncs, infos = env.step(
                     unbatchify(actions, env) # for PZ
                 )
                 # add to episode storage
                 rb_obs[step] = obs #BUFFER STORES EACH TRANSITION
-                # print(rewards)
                 rb_rewards[step] = batchify(rewards, device) #each agent separate
                 #ONE EPISODE AT AT TIME
                 if prosocial:
@@ -215,12 +223,13 @@ if __name__ == "__main__":
 
                 # compute episodic return
                 total_episodic_return += rb_rewards[step].cpu().numpy()
-
                 # if we reach termination or truncation, end
                 if any([terms[a] for a in terms]) or any([truncs[a] for a in truncs]):
                     end_step = step
                     terminated = True
                     break
+            #if not terminated:
+            #    end_step = num_steps-1 #CHECK
 
         # GENERATE EXPERIENCE FOR REPLAY BUFFER (Actor)
 
@@ -244,8 +253,8 @@ if __name__ == "__main__":
         b_returns = torch.flatten(rb_returns[:end_step], start_dim=0, end_dim=1)
         b_values = torch.flatten(rb_values[:end_step], start_dim=0, end_dim=1)
         b_advantages = torch.flatten(rb_advantages[:end_step], start_dim=0, end_dim=1)
-        #SAMPLE FROM BUFFER AND UPDATE NETWORKS (Learner)
-        
+
+        #SAMPLE FROM BUFFER AND UPDATE NETWORKS (Learner)        
         # Optimizing the policy and value network
         b_index = np.arange(len(b_obs))
         clip_fracs = []
@@ -259,8 +268,8 @@ if __name__ == "__main__":
                 # select the indices we want to train on
                 end = start + batch_size
                 batch_index = b_index[start:end]
-                _, newlogprob, entropy, value = agent.get_action_and_value(
-                    b_obs[batch_index], b_actions.long()[batch_index]
+                _, newlogprob, entropy, values = agent.get_actions_and_values(
+                    b_obs[batch_index], num_agents, b_actions.long()[batch_index]
                 )
                 logratio = newlogprob - b_logprobs[batch_index]
                 ratio = logratio.exp() #divergence
@@ -287,10 +296,9 @@ if __name__ == "__main__":
                 pg_loss = torch.max(pg_loss1, pg_loss2).mean() #clipping
 
                 # Value loss
-                value = value.flatten()
-                v_loss_unclipped = (value - b_returns[batch_index]) ** 2
+                v_loss_unclipped = (values - b_returns[batch_index]) ** 2
                 v_clipped = b_values[batch_index] + torch.clamp(
-                    value - b_values[batch_index],
+                    values - b_values[batch_index],
                     -clip_coef,
                     clip_coef,
                 )
@@ -344,7 +352,7 @@ if __name__ == "__main__":
             terms = [False]
             truncs = [False]
             while not any(terms) and not any(truncs):
-                actions, logprobs, _, values = agent.get_action_and_value(obs)
+                actions, logprobs, _, values = agent.get_actions_and_values(obs, num_agents)
                 obs, rewards, terms, truncs, infos = env.step(unbatchify(actions, env))
                 obs = batchify_obs(obs, device)
                 terms = [terms[a] for a in terms]

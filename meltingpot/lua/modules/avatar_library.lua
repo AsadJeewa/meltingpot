@@ -281,6 +281,7 @@ function Avatar:reset()
 end
 
 function Avatar:_startFrame()
+  -- self._playerVolatileVariables.reward = {}
   self._playerVolatileVariables.reward = 0
 end
 
@@ -293,6 +294,7 @@ function Avatar:start(locator)
     actions[actionName] = action.default
   end
   self._playerVolatileVariables = {
+      -- reward = {},
       reward = 0,
       actions = actions
   }
@@ -362,9 +364,25 @@ function Avatar:getSpawnGroup()
 end
 
 function Avatar:addReward(amount)
-  local function _addReward(amount)
+  -- if (next(self._playerVolatileVariables.reward) == nil) then 
+  --   self._playerVolatileVariables.reward["eat"] = 0.0
+  --   self._playerVolatileVariables.reward["clean"] = 0.0
+  -- end
+  -- print(self._playerVolatileVariables.reward)
+local function _addReward(amount)
+    if(type(amount)=="table") then 
+      for k, v in pairs(amount) do
+        k, v = next(amount)      
+        print(k,v)
+        -- amount = amount["eat"] + amount["clean"]
+        self._playerVolatileVariables.reward[k] = (
+          self._playerVolatileVariables.reward[k] + amount[k])
+        print(self._playerVolatileVariables.reward[k])
+      end
+    else
     self._playerVolatileVariables.reward = (
           self._playerVolatileVariables.reward + amount)
+    end
   end
   if self._config.skipWaitStateRewards then
     -- Only add rewards if avatar is not in a wait state.
@@ -1137,6 +1155,7 @@ function PeriodicNeed:__init__(kwargs)
       {'delay', args.positive},
       -- `reward` the reward value to deliver on every step after `delay`.
       {'reward', args.numberType},
+      -- {'reward', args.tableType},
   })
   PeriodicNeed.Base.__init__(self, kwargs)
   self._config.delay = kwargs.delay
