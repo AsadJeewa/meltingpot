@@ -446,25 +446,27 @@ end
 function Taste:cleaned()
   local playerIndex = self.gameObject:getComponent('Avatar'):getIndex()
   local vector_reward = self.gameObject:getComponent('AllNonselfCumulants'):getPlayerVectorRewards(playerIndex)
-  vector_reward(2):fill(self._config.rewardAmount)
   if self._config.role == 'cleaner' then
     self.gameObject:getComponent('Avatar'):addReward(self._config.rewardAmount) --not used as free role
-  end
-  if self._config.role == 'consumer' then
+    vector_reward(2):fill(self._config.rewardAmount)
+  elseif self._config.role == 'consumer' then
     self.gameObject:getComponent('Avatar'):addReward(0.0)
+  else
+    self.gameObject:getComponent('Avatar'):addReward(self._config.rewardAmount)
+    vector_reward(2):fill(self._config.rewardAmount)
   end
 end
 
 function Taste:consumed(edibleDefaultReward)
+  local playerIndex = self.gameObject:getComponent('Avatar'):getIndex()
+  local vector_reward = self.gameObject:getComponent('AllNonselfCumulants'):getPlayerVectorRewards(playerIndex)
   if self._config.role == 'cleaner' then
     self.gameObject:getComponent('Avatar'):addReward(0.0)
   elseif self._config.role == 'consumer' then
-    self.gameObject:getComponent('Avatar'):addReward(self._config.rewardAmount)
-    local playerIndex = enteringGameObject:getComponent('Avatar'):getIndex()
-    local vector_reward = self.gameObject:getComponent('AllNonselfCumulants'):getPlayerVectorRewards(playerIndex)
-    vector_reward(2):fill(self._config.rewardAmount)
+    vector_reward(1):fill(self._config.rewardAmount)
   else
     self.gameObject:getComponent('Avatar'):addReward(edibleDefaultReward)
+    vector_reward(1):fill(self._config.rewardAmount)
   end
   self:setCumulant()
 end
