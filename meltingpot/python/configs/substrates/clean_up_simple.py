@@ -53,29 +53,36 @@ PrefabConfig = game_object_utils.PrefabConfig
 # Warning: setting `_ENABLE_DEBUG_OBSERVATIONS = True` may cause slowdown.
 _ENABLE_DEBUG_OBSERVATIONS = False
 
+# ASCII_MAP = """
+# WWWWWWW
+# WF P BW
+# WF   BW
+# WF   BW
+# WF   BW
+# WF P BW
+# WWWWWWW
+# """
+#7x7
+
 ASCII_MAP = """
-WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW
-WHFFFHFFHFHFHFHFHFHFHHFHFFFHFW
-WHFHFHFFHFHFHFHFHFHFHHFHFFFHFW
-WHFFHFFHHFHFHFHFHFHFHHFHFFFHFW
-WHFHFHFFHFHFHFHFHFHFHHFHFFFHFW
-WHFFFFFFHFHFHFHFHFHFHHFHFFFHFW
-W==============+~FHHHHHHf====W
-W   P    P      ===+~SSf     W
-W     P     P   P  <~Sf  P   W
-W             P   P<~S>      W
-W   P    P         <~S>   P  W
-W               P  <~S>P     W
-W     P           P<~S>      W
-W           P      <~S> P    W
-W  P             P <~S>      W
-W^T^T^T^T^T^T^T^T^T;~S,^T^T^TW
-WBBBBBBBBBBBBBBBBBBBssBBBBBBBW
-WBBBBBBBBBBBBBBBBBBBBBBBBBBBBW
-WBBBBBBBBBBBBBBBBBBBBBBBBBBBBW
-WBBBBBBBBBBBBBBBBBBBBBBBBBBBBW
-WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW
+FP B
+F  B
+F  B
+F PB
 """
+#4x4
+#x sprite size =
+
+# ASCII_MAP = """
+# FP     B
+# F      B
+# F      B
+# F      B
+# F      B
+# F      B
+# F      B
+# F     PB
+# """
 
 # Map a character to the prefab it represents in the ASCII map.
 CHAR_PREFAB_MAP = {
@@ -95,7 +102,7 @@ CHAR_PREFAB_MAP = {
     "~": {"type": "all", "list": ["river", "shadow_w",]},
     "T": {"type": "all", "list": ["sand", "grass_edge", "potential_apple"]},
     "S": "river",
-    "H": {"type": "all", "list": ["river", "potential_dirt"]},
+    "H": {"type": "all", "list": ["river", "potential_dirt"]},#starts clean
     "F": {"type": "all", "list": ["river", "actual_dirt"]},
 }
 
@@ -402,9 +409,12 @@ POTENTIAL_APPLE = {
         {
             "component": "AppleGrow",
             "kwargs": {
-                "maxAppleGrowthRate": 0.05,
-                "thresholdDepletion": 0.4,
-                "thresholdRestoration": 0.0,
+                # "maxAppleGrowthRate": 0.05,#multiplied by the fraction of dirt in the river to get probability. Less dirt means higher apple regrowth rate.
+                # "thresholdDepletion": 0.4,#apples stop growing when dirt exceeds this percentage
+                # "thresholdRestoration": 0.0,#apples grow at max when dirt grows below this percentage
+                "maxAppleGrowthRate": 1.0,
+                "thresholdDepletion": 0.75,
+                "thresholdRestoration": 0.25,
             }
         }
     ]
@@ -463,15 +473,15 @@ def create_dirt_prefab(initial_state):
 # Primitive action components.
 # pylint: disable=bad-whitespace
 # pyformat: disable
-NOOP        = {"move": 0, "turn":  0, "fireZap": 0, "fireClean": 0}
-FORWARD     = {"move": 1, "turn":  0, "fireZap": 0, "fireClean": 0}
-STEP_RIGHT  = {"move": 2, "turn":  0, "fireZap": 0, "fireClean": 0}
-BACKWARD    = {"move": 3, "turn":  0, "fireZap": 0, "fireClean": 0}
-STEP_LEFT   = {"move": 4, "turn":  0, "fireZap": 0, "fireClean": 0}
-TURN_LEFT   = {"move": 0, "turn": -1, "fireZap": 0, "fireClean": 0}
-TURN_RIGHT  = {"move": 0, "turn":  1, "fireZap": 0, "fireClean": 0}
-FIRE_ZAP    = {"move": 0, "turn":  0, "fireZap": 1, "fireClean": 0}
-FIRE_CLEAN  = {"move": 0, "turn":  0, "fireZap": 0, "fireClean": 1}
+NOOP        = {"move": 0, "turn":  0,"fireClean": 0}
+FORWARD     = {"move": 1, "turn":  0,"fireClean": 0}
+STEP_RIGHT  = {"move": 2, "turn":  0,"fireClean": 0}
+BACKWARD    = {"move": 3, "turn":  0,"fireClean": 0}
+STEP_LEFT   = {"move": 4, "turn":  0,"fireClean": 0}
+TURN_LEFT   = {"move": 0, "turn": -1,"fireClean": 0}
+TURN_RIGHT  = {"move": 0, "turn":  1,"fireClean": 0}
+#FIRE_ZAP    = {"move": 0, "turn":  0, "fireZap": 1, "fireClean": 0}
+FIRE_CLEAN  = {"move": 0, "turn":  0,"fireClean": 1}
 # pyformat: enable
 # pylint: enable=bad-whitespace
 
@@ -483,7 +493,7 @@ ACTION_SET = (
     STEP_RIGHT,
     TURN_LEFT,
     TURN_RIGHT,
-    FIRE_ZAP,
+    # FIRE_ZAP,
     FIRE_CLEAN
 )
 
@@ -690,12 +700,12 @@ def create_avatar_object(player_idx: int,
                   "spawnGroup": "spawnPoints",
                   "actionOrder": ["move",
                                   "turn",
-                                  "fireZap",
+                                #   "fireZap",
                                   "fireClean"],
                   "actionSpec": {
                       "move": {"default": 0, "min": 0, "max": len(_COMPASS)},
                       "turn": {"default": 0, "min": -1, "max": 1},
-                      "fireZap": {"default": 0, "min": 0, "max": 1},
+                    #   "fireZap": {"default": 0, "min": 0, "max": 1},
                       "fireClean": {"default": 0, "min": 0, "max": 1},
                   },
                   "view": {
@@ -727,16 +737,16 @@ def create_avatar_object(player_idx: int,
               "component": "Cleaner",
               "kwargs": {
                   "cooldownTime": 2,
-                  "beamLength": 3,
-                  "beamRadius": 1,
-                  "rewardForCleaning": 1.0,
+                  "beamLength": 1,
+                  "beamRadius": 0,
+                  "rewardForCleaning": 0.0,
               }
           },
           {
               "component": "Taste",
               "kwargs": {
                   "role": "free",
-                  "rewardAmount": 1,#vector reward
+                  "rewardAmount": 0.0,#vector reward, cleaning reward
               }
           },
           {
@@ -841,7 +851,7 @@ def get_config():
 
   # The roles assigned to each player.
   config.valid_roles = frozenset({"default"})
-  config.default_player_roles = ("default",) * 7
+  config.default_player_roles = ("default",) * 2
 
   return config
 
@@ -855,12 +865,12 @@ def build(
   num_players = len(roles)
   # Build the rest of the substrate definition.
   substrate_definition = dict(
-      levelName="clean_up",
+      levelName="clean_up_simple",
       levelDirectory="meltingpot/lua/levels",
       numPlayers=num_players,
       # Define upper bound of episode length since episodes end stochastically.
       maxEpisodeLengthFrames=5000,
-      spriteSize=8,
+      spriteSize=8,#8
       topology="BOUNDED",  # Choose from ["BOUNDED", "TORUS"],
       simulation={
           "map": ASCII_MAP,
