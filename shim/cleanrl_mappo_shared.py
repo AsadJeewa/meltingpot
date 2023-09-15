@@ -13,7 +13,8 @@ from datetime import datetime
 
 #BEGIN DEBUG
 mpot = True
-exp_name = "ctde_4x4"+str(datetime.now())
+# exp_name = "ctde_4x4_divergent"+"_"+str(datetime.now())
+exp_name = "test"+"_"+str(datetime.now())
 prosocial = False
 #END DEBUG
 
@@ -69,7 +70,7 @@ class Agent(nn.Module):
         # x is combined observations
         genActions = False
         if actions is None:
-            actions = torch.zeros(num_agents)#.to(device)
+            actions = torch.zeros(num_agents).to(device)
             genActions = True
         hidden_all = self.network(x / 255.0)
         #TODO Add param for parameter sharing
