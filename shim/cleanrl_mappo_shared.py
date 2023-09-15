@@ -13,7 +13,7 @@ from datetime import datetime
 
 #BEGIN DEBUG
 mpot = True
-exp_name = "ctde_divergent_0_"+str(datetime.now())
+exp_name = "ctde_4x4"+str(datetime.now())
 prosocial = False
 #END DEBUG
 
@@ -39,6 +39,7 @@ class Agent(nn.Module):
         #     )
         # else:
         # MAKE CTDE
+        #feature extractor
         self.network = nn.Sequential(
             self._layer_init(nn.Conv2d(4, 32, 3, padding=1)),#pixel observations, out channels 32
             nn.MaxPool2d(2),
@@ -66,20 +67,21 @@ class Agent(nn.Module):
 
     def get_actions_and_values(self, x, num_agents, actions=None):
         # x is combined observations
+        genActions = False
         if actions is None:
             actions = torch.zeros(num_agents)#.to(device)
+            genActions = True
         hidden_all = self.network(x / 255.0)
         #TODO Add param for parameter sharing
         for i in range(num_agents):
+            # NAN ISSUE
             hidden = hidden_all[i]
             logits = self.actor(hidden) #probabilities
             probs = Categorical(logits=logits) # create a distribution
-            if actions is None:
+            if genActions:
                 action = probs.sample()
                 actions[i] = action
         actions = actions.int()
-        if not torch.all(actions == actions[0]):
-            print("DIFF: ",actions)
         return actions, probs.log_prob(actions), probs.entropy(), self.critic(hidden_all) #actions, logprobs, _, values 
 
 
@@ -143,7 +145,7 @@ if __name__ == "__main__":
 
     """ ENV SETUP """
     if mpot:
-        env = load_meltingpot("clean_up")
+        env = load_meltingpot("clean_up_simple")
         env = MeltingPotCompatibilityV0(env, render_mode="None")
     else:
         env = pistonball_v6.parallel_env(
@@ -151,8 +153,8 @@ if __name__ == "__main__":
         )
 
     env = color_reduction_v0(env, 'full') # grayscale
-    env = resize_v1(env, frame_size[0], frame_size[1]) # resize and stack images
-    env = frame_stack_v1(env, stack_size=stack_size)
+    env = resize_v1(env, frame_size[0], frame_size[1]) # resize 
+    env = frame_stack_v1(env, stack_size=stack_size) # stack
 
     num_agents = len(env.possible_agents)
     num_actions = env.action_space(env.possible_agents[0]).n
@@ -208,7 +210,7 @@ if __name__ == "__main__":
                 actions, logprobs, _, values = agent.get_actions_and_values(obs, num_agents)
                 # execute the environment and log data
                 next_obs, rewards, terms, truncs, infos = env.step(
-                    unbatchify(actions, env) # for PZ
+                    unbatchify(actions, env) # info has vector reward
                 )
                 # add to episode storage
                 rb_obs[step] = obs #BUFFER STORES EACH TRANSITION
@@ -319,7 +321,7 @@ if __name__ == "__main__":
         torch.save(agent.actor.state_dict(), "model/"+exp_name)
         print("save")
 
-        print(f"Episodic Return: {np.mean(total_episodic_return)}")
+        print(f"Mean Episodic Return: {np.mean(total_episodic_return)}")
         tb.add_scalar("mean_episodic_return",np.mean(total_episodic_return), step_count)
         print(f"Step Count: {step_count}")
         print(f"Episode Length: {end_step}")
