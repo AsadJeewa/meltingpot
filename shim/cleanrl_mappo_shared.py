@@ -9,12 +9,13 @@ from shimmy import MeltingPotCompatibilityV0
 from shimmy.utils.meltingpot import load_meltingpot
 from gymnasium.wrappers import GrayScaleObservation
 from pettingzoo.butterfly import pistonball_v6
-from datetime import datetime
+from datetime import datetime, timezone
 
 #BEGIN DEBUG
 mpot = True
-# exp_name = "ctde_4x4_divergent"+"_"+str(datetime.now())
-exp_name = "test"+"_"+str(datetime.now())
+now = datetime.now(tz=timezone.utc)
+date_time_str = now.strftime("%d/%m/%Y-%H:%M:%S")
+exp_name = "test"+"_"+date_time_str
 prosocial = False
 #END DEBUG
 
