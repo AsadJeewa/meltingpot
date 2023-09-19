@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 #BEGIN DEBUG
 mpot = True
 now = datetime.now(tz=timezone.utc)
-date_time_str = now.strftime("%d/%m/%Y-%H:%M:%S")
+date_time_str = now.strftime("%d-%m-%Y_%H:%M:%S")
 exp_name = "test"+"_"+date_time_str
 prosocial = False
 #END DEBUG
