@@ -47,6 +47,7 @@ from meltingpot.python.utils.substrates import colors
 from meltingpot.python.utils.substrates import game_object_utils
 from meltingpot.python.utils.substrates import shapes
 from meltingpot.python.utils.substrates import specs
+from enum import Enum
 
 PrefabConfig = game_object_utils.PrefabConfig
 
@@ -54,28 +55,44 @@ PrefabConfig = game_object_utils.PrefabConfig
 _ENABLE_DEBUG_OBSERVATIONS = False
 
 #BEGIN DEBUG
-divergent = True
+divergent = False
+class Mode(Enum):
+    SINGLE = 1
+    MULTI = 2
+    MULTI_COORD = 3
+mode = Mode.MULTI
 #END DEBUG
 
-# ASCII_MAP = """
-# WWWWWWW
-# WF P BW
-# WF   BW
-# WF   BW
-# WF   BW
-# WF P BW
-# WWWWWWW
-# """
-#7x7
+if mode == Mode.SINGLE:
+    ASCII_MAP = """
+FPB
+"""
+    num_agents = 1
+# 1x3
+# x sprite size = 8
+# 8x24 -> 64x64
 
-ASCII_MAP = """
+elif mode == Mode.MULTI:
+    ASCII_MAP = """
+FPB
+FPB
+"""
+    num_agents = 2
+# 2x3
+# x sprite size = 8
+# 16x24 -> 64x64
+
+elif mode == Mode.MULTI_COORD:
+    ASCII_MAP = """
 FP B
 F  B
 F  B
 F PB
 """
-#4x4
-#x sprite size =
+    num_agents = 2
+# 4x4
+# x sprite size = 8
+# 32x32 -> 64x64
 
 # ASCII_MAP = """
 # FP     B
@@ -418,7 +435,7 @@ POTENTIAL_APPLE = {
                 # "thresholdRestoration": 0.0,#apples grow at max when dirt grows below this percentage
                 "maxAppleGrowthRate": 1.0,
                 "thresholdDepletion": 0.75,
-                "thresholdRestoration": 0.25,
+                "thresholdRestoration": 0.5,
             }
         }
     ]
@@ -717,7 +734,7 @@ def create_avatar_object(player_idx: int,
                       "right": 5,
                       "forward": 9,
                       "backward": 1,
-                      "centered": False
+                      "centered": False #HERE
                   },
                   "spriteMap": custom_sprite_map,
               }
@@ -750,7 +767,6 @@ def create_avatar_object(player_idx: int,
               "component": "Taste",
               "kwargs": {
                   "role": "free",
-                  "rewardAmount": 1.0 if divergent else 0.0,#vector reward, cleaning reward
               }
           },
           {
@@ -855,7 +871,7 @@ def get_config():
 
   # The roles assigned to each player.
   config.valid_roles = frozenset({"default"})
-  config.default_player_roles = ("default",) * 2
+  config.default_player_roles = ("default",) * num_agents
 
   return config
 
