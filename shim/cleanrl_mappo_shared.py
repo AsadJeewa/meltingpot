@@ -10,15 +10,42 @@ from shimmy.utils.meltingpot import load_meltingpot
 from gymnasium.wrappers import GrayScaleObservation
 from pettingzoo.butterfly import pistonball_v6
 from datetime import datetime, timezone
+import argparse
+import os
+import random
 
 #BEGIN DEBUG
 mpot = True
-now = datetime.now(tz=timezone.utc)
-date_time_str = now.strftime("%d-%m-%Y_%H:%M:%S")
-exp_name = "test"+"_"+date_time_str
 prosocial = False
 #END DEBUG
 
+def parse_args():
+    # fmt: off
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--exp_name", type=str, default=os.path.basename(__file__).rstrip(".py"),
+        help="the name of this experiment")
+    parser.add_argument("--seed", type=int, default=1,
+        help="seed of the experiment")
+    # Algorithm specific arguments
+    parser.add_argument("--env_id", type=str, default="clean_up_simple",
+        help="the id of the environment")
+    parser.add_argument("--timesteps", type=int, default=2e7,
+        help="total timesteps of the experiments")
+    parser.add_argument("--batch_size", type=int, default=32,
+        help="batch size")
+    parser.add_argument("--learning_rate", type=float, default=0.001,
+        help="the learning rate of the optimizer")
+    parser.add_argument("--epochs", type=int, default=3,
+        help="the K epochs to update the policy")
+    parser.add_argument("--num_steps", type=int, default=1000,
+        help="the number of steps to run in each environment per policy rollout")
+    parser.add_argument("--num_stacked", type=int, default=4,
+        help="the number of stacked framed")
+    parser.add_argument("--frame_size", type=int, default=64,#32
+        help="the frame size of observations")
+
+    args = parser.parse_args()
+    return args
 
 class Agent(nn.Module):
     def __init__(self, num_actions):
@@ -123,31 +150,40 @@ def unbatchify(x, env):
 
 
 if __name__ == "__main__":
+    args = parse_args()
+
+    now = datetime.now(tz=timezone.utc)
+    date_time_str = now.strftime("%d-%m-%Y_%H:%M:%S")
+    exp_name = f"{args.exp_name}__{args.env_id}__{args.seed}__{date_time_str}"
     """ALGO PARAMS"""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     ent_coef = 0.1
     vf_coef = 0.1
     clip_coef = 0.1
     gamma = 0.99
-    batch_size = 32
-    total_timesteps = 2e7
-    num_epochs = 3
+    batch_size = args.batch_size
+    total_timesteps = args.timesteps
+    num_epochs = args.epochs
+
+    # TRY NOT TO MODIFY: seeding
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    torch.backends.cudnn.deterministic = True
+    torch.use_deterministic_algorithms(True)
 
     if mpot:
         # frame_size = (88, 88)
         # stack_size = 3
-        num_steps = 1000 #default 1000
+        num_steps = args.num_steps #default 1000
     else: 
         num_steps = 125
-    frame_size = (64, 64)
-    stack_size = 4
-   
-
-    total_episodes = 200
+    frame_size = (args.frame_size, args.frame_size)
+    stack_size = args.num_stacked
 
     """ ENV SETUP """
     if mpot:
-        env = load_meltingpot("clean_up_simple")
+        env = load_meltingpot(args.env_id)
         env = MeltingPotCompatibilityV0(env, render_mode="None")
     else:
         env = pistonball_v6.parallel_env(
@@ -164,7 +200,7 @@ if __name__ == "__main__":
 
     """ LEARNER SETUP """
     agent = Agent(num_actions=num_actions).to(device)
-    optimizer = optim.Adam(agent.parameters(), lr=0.001, eps=1e-5)
+    optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
     """ ALGO LOGIC: EPISODE STORAGE"""
     end_step = 0
