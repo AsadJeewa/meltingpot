@@ -53,6 +53,10 @@ PrefabConfig = game_object_utils.PrefabConfig
 # Warning: setting `_ENABLE_DEBUG_OBSERVATIONS = True` may cause slowdown.
 _ENABLE_DEBUG_OBSERVATIONS = False
 
+#BEGIN DEBUG
+divergent = True
+#END DEBUG
+
 # ASCII_MAP = """
 # WWWWWWW
 # WF P BW
@@ -739,14 +743,14 @@ def create_avatar_object(player_idx: int,
                   "cooldownTime": 2,
                   "beamLength": 1,
                   "beamRadius": 0,
-                  "rewardForCleaning": 0.0,
+                  "rewardForCleaning": 1.0 if divergent else 0.0,
               }
           },
           {
               "component": "Taste",
               "kwargs": {
                   "role": "free",
-                  "rewardAmount": 0.0,#vector reward, cleaning reward
+                  "rewardAmount": 1.0 if divergent else 0.0,#vector reward, cleaning reward
               }
           },
           {
