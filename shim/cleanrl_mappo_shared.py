@@ -7,13 +7,13 @@ from torch.distributions.categorical import Categorical
 from torch.utils.tensorboard import SummaryWriter
 from shimmy import MeltingPotCompatibilityV0
 from shimmy.utils.meltingpot import load_meltingpot
-from gymnasium.wrappers import GrayScaleObservation
 from pettingzoo.butterfly import pistonball_v6
-from datetime import datetime, timezone
+from pettingzoo.mpe import simple_spread_v3
 import argparse
 import os
 import random
 from distutils.util import strtobool
+import time
 
 #BEGIN DEBUG
 
@@ -87,7 +87,7 @@ class Agent(nn.Module):
             self._layer_init(nn.Linear(128 * 8 * 8, 512)),
             nn.ReLU(),
         )
-        self.actor = self._layer_init(nn.Linear(512, num_actions), std=0.01)#predict actions 0,1,2 for EACH agent (policy)
+        self.actor = self._layer_init(nn.Linear(512, num_actions), std=0.01)#predict actions 0,1,2 for one agent (policy)
         self.critic = self._layer_init(nn.Linear(512, 1))#predict value (given state)
 
     def _layer_init(self, layer, std=np.sqrt(2), bias_const=0.0):
@@ -157,10 +157,7 @@ def unbatchify(x, env):
 if __name__ == "__main__":
     args = parse_args()
     pz = args.pz
-
-    now = datetime.now(tz=timezone.utc)
-    date_time_str = now.strftime("%d-%m-%Y_%H:%M:%S")
-    exp_name = f"{args.exp_name}__{args.env_id}__{args.seed}__{date_time_str}"
+    exp_name = f"{args.exp_name}__{args.env_id}__{args.seed}__{int(time.time())}"
     """ALGO PARAMS"""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     ent_coef = 0.1
@@ -193,6 +190,9 @@ if __name__ == "__main__":
         env = pistonball_v6.parallel_env(
             render_mode="None", continuous=False, max_cycles=num_steps
         )
+        # env = simple_spread_v3.parallel_env(
+        #     render_mode="None"
+        # )
     else:
         env = load_meltingpot(args.env_id)
         env = MeltingPotCompatibilityV0(env, render_mode="None")
