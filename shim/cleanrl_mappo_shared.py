@@ -13,10 +13,10 @@ from datetime import datetime, timezone
 import argparse
 import os
 import random
+from distutils.util import strtobool
 
 #BEGIN DEBUG
-mpot = True
-prosocial = False
+
 #END DEBUG
 
 def parse_args():
@@ -43,7 +43,11 @@ def parse_args():
         help="the number of stacked framed")
     parser.add_argument("--frame_size", type=int, default=64,#32
         help="the frame size of observations")
-
+    parser.add_argument("--pz", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
+        help="if toggled, pz environment is used instead of mpot")
+    parser.add_argument("--prosocial", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
+        help="if toggled, prosocial training")
+    
     args = parser.parse_args()
     return args
 
@@ -96,13 +100,14 @@ class Agent(nn.Module):
 
     def get_actions_and_values(self, x, num_agents, actions=None):
         # x is combined observations
+        upper_bound = x.shape[0]#batch size
         genActions = False
         if actions is None:
             actions = torch.zeros(num_agents).to(device)
             genActions = True
         hidden_all = self.network(x / 255.0)
         #TODO Add param for parameter sharing
-        for i in range(num_agents):
+        for i in range(upper_bound):
             # NAN ISSUE
             hidden = hidden_all[i]
             logits = self.actor(hidden) #probabilities
@@ -114,7 +119,7 @@ class Agent(nn.Module):
         return actions, probs.log_prob(actions), probs.entropy(), self.critic(hidden_all) #actions, logprobs, _, values 
 
 
-def batchify_obs(obs, device, mpot):#stack agents
+def batchify_obs(obs, device):#stack agents
     """Converts PZ style observations to batch of torch arrays."""    
     # convert to list of np arrays
     # if mpot: 
@@ -151,6 +156,7 @@ def unbatchify(x, env):
 
 if __name__ == "__main__":
     args = parse_args()
+    pz = args.pz
 
     now = datetime.now(tz=timezone.utc)
     date_time_str = now.strftime("%d-%m-%Y_%H:%M:%S")
@@ -171,24 +177,26 @@ if __name__ == "__main__":
     torch.manual_seed(args.seed)
     torch.backends.cudnn.deterministic = True
     torch.use_deterministic_algorithms(True)
-
-    if mpot:
+    
+    if pz: 
+        num_steps = 125
+    else:
+        num_steps = args.num_steps #default 1000
         # frame_size = (88, 88)
         # stack_size = 3
-        num_steps = args.num_steps #default 1000
-    else: 
-        num_steps = 125
+    
     frame_size = (args.frame_size, args.frame_size)
     stack_size = args.num_stacked
 
     """ ENV SETUP """
-    if mpot:
-        env = load_meltingpot(args.env_id)
-        env = MeltingPotCompatibilityV0(env, render_mode="None")
-    else:
+    if pz:
         env = pistonball_v6.parallel_env(
             render_mode="None", continuous=False, max_cycles=num_steps
         )
+    else:
+        env = load_meltingpot(args.env_id)
+        env = MeltingPotCompatibilityV0(env, render_mode="None")
+    
 
     env = color_reduction_v0(env, 'full') # grayscale
     env = resize_v1(env, frame_size[0], frame_size[1]) # resize 
@@ -243,7 +251,7 @@ if __name__ == "__main__":
             for step in range(0, num_steps):
                 step_count+=1
                 # rollover the observation
-                obs = batchify_obs(next_obs, device, mpot) # for torch 
+                obs = batchify_obs(next_obs, device) # for torch 
                 # get action from the agent
                 actions, logprobs, _, values = agent.get_actions_and_values(obs, num_agents)
                 # execute the environment and log data
@@ -254,7 +262,7 @@ if __name__ == "__main__":
                 rb_obs[step] = obs #BUFFER STORES EACH TRANSITION
                 rb_rewards[step] = batchify(rewards, device) #each agent separate
                 #ONE EPISODE AT AT TIME
-                if prosocial:
+                if args.prosocial:
                     rb_rewards[step]  = torch.mean(rb_rewards[step])
                 rb_terms[step] = batchify(terms, device)
                 rb_actions[step] = actions
