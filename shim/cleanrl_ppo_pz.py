@@ -75,7 +75,7 @@ class Agent(nn.Module):
         return action, probs.log_prob(action), probs.entropy(), self.critic(hidden) #actions, logprobs, _, values 
 
 
-def batchify_obs(obs, device, mpot):#stack agents
+def batchify_obs(obs, device):#stack agents
     """Converts PZ style observations to batch of torch arrays."""    
     # convert to list of np arrays
     # if mpot: 
@@ -194,7 +194,7 @@ if __name__ == "__main__":
             for step in range(0, num_steps):
                 step_count+=1
                 # rollover the observation
-                obs = batchify_obs(next_obs, device, mpot) # for torch 
+                obs = batchify_obs(next_obs, device) # for torch 
                 # get action from the agent
                 actions, logprobs, _, values = agent.get_action_and_value(obs)
                 # execute the environment and log data

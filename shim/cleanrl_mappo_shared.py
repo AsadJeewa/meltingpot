@@ -29,7 +29,7 @@ def parse_args():
     # Algorithm specific arguments
     parser.add_argument("--env_id", type=str, default="clean_up_simple",
         help="the id of the environment")
-    parser.add_argument("--timesteps", type=int, default=2e7,
+    parser.add_argument("--timesteps", type=int, default=2e6,
         help="total timesteps of the experiments")
     parser.add_argument("--batch_size", type=int, default=32,
         help="batch size")
@@ -98,7 +98,7 @@ class Agent(nn.Module):
     def get_values(self, x):
         return self.critic(self.network(x / 255.0))# get value of state for each agent
 
-    def get_actions_and_values(self, x, num_agents, actions=None):
+    def get_actions_and_values(self, x, num_agents, device="cpu", actions=None):
         # x is combined observations
         upper_bound = x.shape[0]#batch size
         genActions = False
@@ -253,7 +253,7 @@ if __name__ == "__main__":
                 # rollover the observation
                 obs = batchify_obs(next_obs, device) # for torch 
                 # get action from the agent
-                actions, logprobs, _, values = agent.get_actions_and_values(obs, num_agents)
+                actions, logprobs, _, values = agent.get_actions_and_values(obs, num_agents, device)
                 # execute the environment and log data
                 next_obs, rewards, terms, truncs, infos = env.step(
                     unbatchify(actions, env) # info has vector reward
@@ -317,7 +317,7 @@ if __name__ == "__main__":
                 end = start + batch_size
                 batch_index = b_index[start:end]
                 _, newlogprob, entropy, values = agent.get_actions_and_values(
-                    b_obs[batch_index], num_agents, b_actions.long()[batch_index]
+                    b_obs[batch_index], num_agents, device, b_actions.long()[batch_index]
                 )
                 logratio = newlogprob - b_logprobs[batch_index]
                 ratio = logratio.exp() #divergence
@@ -400,7 +400,7 @@ if __name__ == "__main__":
             terms = [False]
             truncs = [False]
             while not any(terms) and not any(truncs):
-                actions, logprobs, _, values = agent.get_actions_and_values(obs, num_agents)
+                actions, logprobs, _, values = agent.get_actions_and_values(obs, num_agents, device)
                 obs, rewards, terms, truncs, infos = env.step(unbatchify(actions, env))
                 obs = batchify_obs(obs, device)
                 terms = [terms[a] for a in terms]
