@@ -6,8 +6,8 @@ from supersuit import color_reduction_v0, frame_stack_v1, resize_v1
 #DEBUG START
 load_model = True
 pz  = False
-    frame_size = (64, 64)
-    stack_size = 4
+frame_size = (64, 64)
+stack_size = 4
 #DEBUG END
 
 if pz:
@@ -30,8 +30,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 while env.agents:
     
     if load_model:
-        exp_name = "ctde_state_4x4_divergent__clean_up_simple__1__20-09-2023_14-51-32"
-        # exp_name = "ctde_state_4x4__clean_up_simple__1__20-09-2023_14-51-30"
+        # exp_name = "ctde_state_4x4_divergent__clean_up_simple__1__20-09-2023_14-51-32"
+        exp_name = "ctde_state_4x4__clean_up_simple__1__20-09-2023_14-51-30"
         # exp_name = "gpu_ctde_state_4x4__clean_up_simple__1__20-09-2023_21-46-14"
         # exp_name = "ctde_pistonball__clean_up_simple__1__20-09-2023_16-04-10"
         modeldir = "model/current/"+exp_name
