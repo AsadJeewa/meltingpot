@@ -60,7 +60,7 @@ class Mode(Enum):
     SINGLE = 1
     MULTI = 2
     MULTI_COORD = 3
-mode = Mode.MULTI
+mode = Mode.MULTI_COORD
 #END DEBUG
 
 if mode == Mode.SINGLE:

@@ -65,7 +65,7 @@ function AppleGrow:update()
   local dirtCount = self._riverMonitor:getDirtCount()
   local cleanCount = self._riverMonitor:getCleanCount()
   local dirtFraction = dirtCount / (dirtCount + cleanCount)
-
+  
   local depletion = self._config.thresholdDepletion
   local restoration = self._config.thresholdRestoration
   local interpolation = (dirtFraction - depletion) / (restoration - depletion)
@@ -215,12 +215,13 @@ function Cleaner:registerUpdaters(updaterRegistry)
             self._coolingTimer = self._config.cooldownTime
             self.gameObject:hitBeam(
                 'cleanHit', self._config.beamLength, self._config.beamRadius)
-                self.gameObject:getComponent('Avatar'):addReward(self._config.rewardForCleaning)
           end
         end
       end
     end
   end
+
+
 
   updaterRegistry:registerUpdater{
       updateFn = clean,
@@ -258,6 +259,9 @@ function Cleaner:setCumulant()
   globalData:setCleanedThisStep(playerIndex)
 end
 
+function Cleaner:getRewardForCleaning()
+  return self._config.rewardForCleaning
+end
 
 --[[ The RiverMonitor is a scene component that tracks the state of the river.
 
@@ -425,12 +429,10 @@ function Taste:__init__(kwargs)
   kwargs = args.parse(kwargs, {
       {'name', args.default('Taste')},
       {'role', args.default('free'), args.oneOf('free', 'cleaner', 'consumer')},
-      {'rewardAmount', args.default(1), args.numberType},
 
   })
   Taste.Base.__init__(self, kwargs)
   self._config.role = kwargs.role
-  self._config.rewardAmount = kwargs.rewardAmount
 end
 
 function Taste:registerUpdaters(updaterRegistry)
@@ -444,29 +446,31 @@ function Taste:registerUpdaters(updaterRegistry)
 end
 
 function Taste:cleaned()
+  local rewardAmount = self.gameObject:getComponent('Cleaner'):getRewardForCleaning()
   local playerIndex = self.gameObject:getComponent('Avatar'):getIndex()
   local vector_reward = self.gameObject:getComponent('AllNonselfCumulants'):getPlayerVectorRewards(playerIndex)
   if self._config.role == 'cleaner' then
-    self.gameObject:getComponent('Avatar'):addReward(self._config.rewardAmount) --not used as free role
-    vector_reward(2):fill(self._config.rewardAmount)
+    self.gameObject:getComponent('Avatar'):addReward(rewardAmount) --not used as free role
+    vector_reward(2):fill(rewardAmount)
   elseif self._config.role == 'consumer' then
     self.gameObject:getComponent('Avatar'):addReward(0.0)
   else
-    self.gameObject:getComponent('Avatar'):addReward(self._config.rewardAmount)
-    vector_reward(2):fill(self._config.rewardAmount)
+    self.gameObject:getComponent('Avatar'):addReward(rewardAmount)
+    vector_reward(2):fill(rewardAmount)
   end
 end
 
 function Taste:consumed(edibleDefaultReward)
   local playerIndex = self.gameObject:getComponent('Avatar'):getIndex()
   local vector_reward = self.gameObject:getComponent('AllNonselfCumulants'):getPlayerVectorRewards(playerIndex)
+  local rewardAmount = self.gameObject:getComponent('Cleaner'):getRewardForCleaning()
   if self._config.role == 'cleaner' then
     self.gameObject:getComponent('Avatar'):addReward(0.0)
   elseif self._config.role == 'consumer' then
-    vector_reward(1):fill(self._config.rewardAmount)
+    vector_reward(1):fill(rewardAmount)
   else
     self.gameObject:getComponent('Avatar'):addReward(edibleDefaultReward)
-    vector_reward(1):fill(self._config.rewardAmount)
+    vector_reward(1):fill(rewardAmount)
   end
   self:setCumulant()
 end
