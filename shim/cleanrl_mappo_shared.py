@@ -235,7 +235,7 @@ if __name__ == "__main__":
     # train for n number of episodes
     tb = SummaryWriter(log_dir="runs/"+exp_name)
 
-    num_updates = total_timesteps // batch_size
+    num_updates = total_timesteps // num_steps
     step_count = 0
     for update in range(1, int(num_updates) + 1):
         print("COLLECTING EXPERIENCE")
@@ -307,15 +307,16 @@ if __name__ == "__main__":
         b_index = np.arange(len(b_obs))
         clip_fracs = []
 
-        print("TRAINING")
-        for repeat in range(num_epochs):#epochs
+        print("TRAINING")#ON COLLECTED EXPERIENCE
+        for repeat in range(num_epochs):#pass over batch n times
             # shuffle the indices we use to access the data
             np.random.shuffle(b_index)
             #SHUFFLE FOR TRAINING
+            #PASS THROUGH ENTIRE EPISODE IN SHUFFLED BATCHES
             for start in range(0, len(b_obs), batch_size):#minibatch
                 # select the indices we want to train on
                 end = start + batch_size
-                batch_index = b_index[start:end]
+                batch_index = b_index[start:end]#shuffled
                 _, newlogprob, entropy, values = agent.get_actions_and_values(
                     b_obs[batch_index], num_agents, device, b_actions.long()[batch_index]
                 )
