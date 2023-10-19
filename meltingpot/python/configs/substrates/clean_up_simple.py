@@ -65,7 +65,9 @@ mode = Mode.MULTI_COORD
 
 if mode == Mode.SINGLE:
     ASCII_MAP = """
-FPB
+F
+P
+B
 """
     num_agents = 1
 # 1x3
@@ -74,20 +76,21 @@ FPB
 
 elif mode == Mode.MULTI:
     ASCII_MAP = """
-FPB
-FPB
+FF
+PP
+BB
 """
     num_agents = 2
-# 2x3
+# 3x2
 # x sprite size = 8
 # 16x24 -> 64x64
 
 elif mode == Mode.MULTI_COORD:
     ASCII_MAP = """
-FP B
-F  B
-F  B
-F PB
+FFFF
+P   
+   P
+BBBB
 """
     num_agents = 2
 # 4x4
@@ -494,15 +497,15 @@ def create_dirt_prefab(initial_state):
 # Primitive action components.
 # pylint: disable=bad-whitespace
 # pyformat: disable
-NOOP        = {"move": 0, "turn":  0,"fireClean": 0}
-FORWARD     = {"move": 1, "turn":  0,"fireClean": 0}
-STEP_RIGHT  = {"move": 2, "turn":  0,"fireClean": 0}
-BACKWARD    = {"move": 3, "turn":  0,"fireClean": 0}
-STEP_LEFT   = {"move": 4, "turn":  0,"fireClean": 0}
-TURN_LEFT   = {"move": 0, "turn": -1,"fireClean": 0}
-TURN_RIGHT  = {"move": 0, "turn":  1,"fireClean": 0}
+NOOP        = {"move": 0, "fireClean": 0}
+FORWARD     = {"move": 1, "fireClean": 0}
+STEP_RIGHT  = {"move": 2, "fireClean": 0}
+BACKWARD    = {"move": 3, "fireClean": 0}
+STEP_LEFT   = {"move": 4, "fireClean": 0}
+# TURN_LEFT   = {"move": 0, "turn": -1,"fireClean": 0}
+# TURN_RIGHT  = {"move": 0, "turn":  1,"fireClean": 0}
 #FIRE_ZAP    = {"move": 0, "turn":  0, "fireZap": 1, "fireClean": 0}
-FIRE_CLEAN  = {"move": 0, "turn":  0,"fireClean": 1}
+FIRE_CLEAN  = {"move": 0, "fireClean": 1}
 # pyformat: enable
 # pylint: enable=bad-whitespace
 
@@ -512,8 +515,8 @@ ACTION_SET = (
     BACKWARD,
     STEP_LEFT,
     STEP_RIGHT,
-    TURN_LEFT,
-    TURN_RIGHT,
+    # TURN_LEFT,
+    # TURN_RIGHT,
     # FIRE_ZAP,
     FIRE_CLEAN
 )
@@ -690,6 +693,10 @@ def create_avatar_object(player_idx: int,
           },
           {
               "component": "Transform",
+            #     "kwargs": {
+            #        "position": (0, 0),
+            #       "orientation": "N"
+            #   }
           },
           {
               "component": "Appearance",
@@ -720,12 +727,12 @@ def create_avatar_object(player_idx: int,
                   "waitState": "playerWait",
                   "spawnGroup": "spawnPoints",
                   "actionOrder": ["move",
-                                  "turn",
+                                #   "turn",
                                 #   "fireZap",
                                   "fireClean"],
                   "actionSpec": {
                       "move": {"default": 0, "min": 0, "max": len(_COMPASS)},
-                      "turn": {"default": 0, "min": -1, "max": 1},
+                    #   "turn": {"default": 0, "min": -1, "max": 1},
                     #   "fireZap": {"default": 0, "min": 0, "max": 1},
                       "fireClean": {"default": 0, "min": 0, "max": 1},
                   },
@@ -737,6 +744,9 @@ def create_avatar_object(player_idx: int,
                       "centered": False #HERE
                   },
                   "spriteMap": custom_sprite_map,
+                  "useAbsoluteCoordinates": True,
+                  "randomizeInitialOrientation": False,
+
               }
           },
           {
