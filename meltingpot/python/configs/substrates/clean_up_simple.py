@@ -640,7 +640,7 @@ def create_scene():
               "component": "DirtSpawner",
               "kwargs": {
                   "dirtSpawnProbability": 0.5,
-                  "delayStartOfDirtSpawning": 50,
+                  "delayStartOfDirtSpawning": 0,
               },
           },
           {
