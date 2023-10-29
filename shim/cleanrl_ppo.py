@@ -231,7 +231,7 @@ if __name__ == "__main__":
         # collect an episode
         with torch.no_grad():
             # collect observations and convert to batch of torch tensors
-            next_obs, info = env.reset(seed=None)
+            next_obs, info = env.reset(seed=args.seed)
             # reset the episodic return
             total_episodic_return = 0            
             # each episode has num_steps
