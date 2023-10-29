@@ -8,7 +8,6 @@ from torch.utils.tensorboard import SummaryWriter
 from shimmy import MeltingPotCompatibilityV0
 from shimmy.utils.meltingpot import load_meltingpot
 from pettingzoo.butterfly import pistonball_v6
-from pettingzoo.mpe import simple_spread_v3
 import argparse
 import os
 import random
@@ -51,7 +50,7 @@ def parse_args():
     args = parser.parse_args()
     return args
 
-class Agent(nn.Module):
+class MAPPO(nn.Module):
     def __init__(self, num_actions):
         super().__init__()
 
@@ -190,9 +189,6 @@ if __name__ == "__main__":
         env = pistonball_v6.parallel_env(
             render_mode="None", continuous=False, max_cycles=num_steps
         )
-        # env = simple_spread_v3.parallel_env(
-        #     render_mode="None"
-        # )
     else:
         env = load_meltingpot(args.env_id)
         env = MeltingPotCompatibilityV0(env, render_mode="None")
@@ -202,13 +198,18 @@ if __name__ == "__main__":
     env = resize_v1(env, frame_size[0], frame_size[1]) # resize 
     env = frame_stack_v1(env, stack_size=stack_size) # stack
 
-    num_agents = len(env.possible_agents)
-    num_actions = env.action_space(env.possible_agents[0]).n
-    observation_size = env.observation_space(env.possible_agents[0]).shape
+    if pz:
+        num_agents = 1
+        num_actions = env.action_space.n
+        observation_size = env.observation_space.shape
+    else:
+        num_agents = len(env.possible_agents)
+        num_actions = env.action_space(env.possible_agents[0]).n
+        observation_size = env.observation_space(env.possible_agents[0]).shape
 
     """ LEARNER SETUP """
-    agent = Agent(num_actions=num_actions).to(device)
-    optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
+    mappo = MAPPO(num_actions=num_actions).to(device)
+    optimizer = optim.Adam(mappo.parameters(), lr=args.learning_rate, eps=1e-5)
 
     """ ALGO LOGIC: EPISODE STORAGE"""
     end_step = 0
@@ -234,7 +235,6 @@ if __name__ == "__main__":
     """ TRAINING LOGIC """
     # train for n number of episodes
     tb = SummaryWriter(log_dir="runs/"+exp_name)
-
     num_updates = total_timesteps // num_steps
     step_count = 0
     for update in range(1, int(num_updates) + 1):
@@ -253,7 +253,7 @@ if __name__ == "__main__":
                 # rollover the observation
                 obs = batchify_obs(next_obs, device) # for torch 
                 # get action from the agent
-                actions, logprobs, _, values = agent.get_actions_and_values(obs, num_agents, device)
+                actions, logprobs, _, values = mappo.get_actions_and_values(obs, num_agents, device)
                 # execute the environment and log data
                 next_obs, rewards, terms, truncs, infos = env.step(
                     unbatchify(actions, env) # info has vector reward
@@ -317,7 +317,7 @@ if __name__ == "__main__":
                 # select the indices we want to train on
                 end = start + batch_size
                 batch_index = b_index[start:end]#shuffled
-                _, newlogprob, entropy, values = agent.get_actions_and_values(
+                _, newlogprob, entropy, values = mappo.get_actions_and_values(
                     b_obs[batch_index], num_agents, device, b_actions.long()[batch_index]
                 )
                 logratio = newlogprob - b_logprobs[batch_index]
@@ -365,7 +365,7 @@ if __name__ == "__main__":
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
-        torch.save(agent.actor.state_dict(), "model/"+exp_name)
+        torch.save(mappo.actor.state_dict(), "model/"+exp_name)
         print("save")
 
         print(f"Mean Episodic Return: {np.mean(total_episodic_return)}")
@@ -391,7 +391,7 @@ if __name__ == "__main__":
     env = resize_v1(env, 64, 64)
     env = frame_stack_v1(env, stack_size=4)
 
-    agent.eval()
+    mappo.eval()
 
     with torch.no_grad():
         # render 5 episodes out
