@@ -10,17 +10,49 @@ from shimmy.utils.meltingpot import load_meltingpot
 from gymnasium.wrappers import GrayScaleObservation
 from pettingzoo.butterfly import pistonball_v6
 from datetime import datetime
-
+import argparse
+import os
+import random
+from distutils.util import strtobool
+import time
 #currently based on https://github.com/vwxyzjn/cleanrl/blob/master/cleanrl/ppo_atari.py
 
 #BEGIN DEBUG
-mpot = True
-exp_name = "super_divergent_0_"+str(datetime.now())
-prosocial = False
 #END DEBUG
 
+def parse_args():
+    # fmt: off
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--exp_name", type=str, default=os.path.basename(__file__).rstrip(".py"),
+        help="the name of this experiment")
+    parser.add_argument("--seed", type=int, default=1,
+        help="seed of the experiment")
+    # Algorithm specific arguments
+    parser.add_argument("--env_id", type=str, default="clean_up_simple",
+        help="the id of the environment")
+    parser.add_argument("--timesteps", type=int, default=2e6,
+        help="total timesteps of the experiments")
+    parser.add_argument("--batch_size", type=int, default=32,
+        help="batch size")
+    parser.add_argument("--learning_rate", type=float, default=0.001,
+        help="the learning rate of the optimizer")
+    parser.add_argument("--epochs", type=int, default=3,
+        help="the K epochs to update the policy")
+    parser.add_argument("--num_steps", type=int, default=1000,
+        help="the number of steps to run in each environment per policy rollout")
+    parser.add_argument("--num_stacked", type=int, default=4,
+        help="the number of stacked framed")
+    parser.add_argument("--frame_size", type=int, default=64,#32
+        help="the frame size of observations")
+    parser.add_argument("--pz", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
+        help="if toggled, pz environment is used instead of mpot")
+    parser.add_argument("--prosocial", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
+        help="if toggled, prosocial training")
+    
+    args = parser.parse_args()
+    return args
 
-class Agent(nn.Module):
+class PPO(nn.Module):
     def __init__(self, num_actions):
         super().__init__()
 
@@ -40,7 +72,7 @@ class Agent(nn.Module):
         #         nn.ReLU(),
         #     )
         # else:
-        # MAKE CTDE
+        #feature extractor
         self.network = nn.Sequential(
             self._layer_init(nn.Conv2d(4, 32, 3, padding=1)),#pixel observations, out channels 32
             nn.MaxPool2d(2),
@@ -111,48 +143,61 @@ def unbatchify(x, env):
 
 
 if __name__ == "__main__":
+    args = parse_args()
+    pz = args.pz
+    exp_name = f"{args.exp_name}__{args.env_id}__{args.seed}__{int(time.time())}"
     """ALGO PARAMS"""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     ent_coef = 0.1
     vf_coef = 0.1
     clip_coef = 0.1
     gamma = 0.99
-    batch_size = 32
-    total_timesteps = 2e7
-    num_epochs = 3
+    batch_size = args.batch_size
+    total_timesteps = args.timesteps
+    num_epochs = args.epochs
 
-    if mpot:
+    # TRY NOT TO MODIFY: seeding
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    torch.backends.cudnn.deterministic = True
+    torch.use_deterministic_algorithms(True)
+
+    if pz: 
+        num_steps = 125
+    else:
+        num_steps = args.num_steps #default 1000
         # frame_size = (88, 88)
         # stack_size = 3
-        num_steps = 1000 #default 1000
-    else: 
-        num_steps = 125
-    frame_size = (64, 64)
-    stack_size = 4
-   
-
-    total_episodes = 200
+    
+    frame_size = (args.frame_size, args.frame_size)
+    stack_size = args.num_stacked
 
     """ ENV SETUP """
-    if mpot:
-        env = load_meltingpot("clean_up")
-        env = MeltingPotCompatibilityV0(env, render_mode="None")
-    else:
+    if pz:
         env = pistonball_v6.parallel_env(
             render_mode="None", continuous=False, max_cycles=num_steps
         )
+    else:
+        env = load_meltingpot(args.env_id)
+        env = MeltingPotCompatibilityV0(env, render_mode="None")
 
     env = color_reduction_v0(env, 'full') # grayscale
     env = resize_v1(env, frame_size[0], frame_size[1]) # resize and stack images
     env = frame_stack_v1(env, stack_size=stack_size)
 
-    num_agents = len(env.possible_agents)
-    num_actions = env.action_space(env.possible_agents[0]).n
-    observation_size = env.observation_space(env.possible_agents[0]).shape
+    if pz:
+        num_agents = 1
+        num_actions = env.action_space.n
+        observation_size = env.observation_space.shape
+    else:
+        num_agents = len(env.possible_agents)
+        num_actions = env.action_space(env.possible_agents[0]).n
+        observation_size = env.observation_space(env.possible_agents[0]).shape
 
     """ LEARNER SETUP """
-    agent = Agent(num_actions=num_actions).to(device)
-    optimizer = optim.Adam(agent.parameters(), lr=0.001, eps=1e-5)
+    ppo = PPO(num_actions=num_actions).to(device)
+    optimizer = optim.Adam(ppo.parameters(), lr=args.learning_rate, eps=1e-5)
 
     """ ALGO LOGIC: EPISODE STORAGE"""
     end_step = 0
@@ -179,7 +224,7 @@ if __name__ == "__main__":
     # train for n number of episodes
     tb = SummaryWriter(log_dir="runs/"+exp_name)
 
-    num_updates = total_timesteps // batch_size
+    num_updates = total_timesteps // num_steps
     step_count = 0
     for update in range(1, int(num_updates) + 1):
         print("COLLECTING EXPERIENCE")
@@ -196,7 +241,7 @@ if __name__ == "__main__":
                 # rollover the observation
                 obs = batchify_obs(next_obs, device) # for torch 
                 # get action from the agent
-                actions, logprobs, _, values = agent.get_action_and_value(obs)
+                actions, logprobs, _, values = ppo.get_action_and_value(obs)
                 # execute the environment and log data
                 next_obs, rewards, terms, truncs, infos = env.step(
                     unbatchify(actions, env) # for PZ
@@ -206,7 +251,7 @@ if __name__ == "__main__":
                 # print(rewards)
                 rb_rewards[step] = batchify(rewards, device) #each agent separate
                 #ONE EPISODE AT AT TIME
-                if prosocial:
+                if args.prosocial:
                     rb_rewards[step]  = torch.mean(rb_rewards[step])
                 rb_terms[step] = batchify(terms, device)
                 rb_actions[step] = actions
@@ -259,7 +304,7 @@ if __name__ == "__main__":
                 # select the indices we want to train on
                 end = start + batch_size
                 batch_index = b_index[start:end]
-                _, newlogprob, entropy, value = agent.get_action_and_value(
+                _, newlogprob, entropy, value = ppo.get_action_and_value(
                     b_obs[batch_index], b_actions.long()[batch_index]
                 )
                 logratio = newlogprob - b_logprobs[batch_index]
@@ -308,7 +353,7 @@ if __name__ == "__main__":
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
-        torch.save(agent.actor.state_dict(), "model/"+exp_name)
+        torch.save(ppo.actor.state_dict(), "model/"+exp_name)
         print("save")
 
         print(f"Episodic Return: {np.mean(total_episodic_return)}")
@@ -334,7 +379,7 @@ if __name__ == "__main__":
     env = resize_v1(env, 64, 64)
     env = frame_stack_v1(env, stack_size=4)
 
-    agent.eval()
+    ppo.eval()
 
     with torch.no_grad():
         # render 5 episodes out
@@ -344,7 +389,7 @@ if __name__ == "__main__":
             terms = [False]
             truncs = [False]
             while not any(terms) and not any(truncs):
-                actions, logprobs, _, values = agent.get_action_and_value(obs)
+                actions, logprobs, _, values = ppo.get_action_and_value(obs)
                 obs, rewards, terms, truncs, infos = env.step(unbatchify(actions, env))
                 obs = batchify_obs(obs, device)
                 terms = [terms[a] for a in terms]
