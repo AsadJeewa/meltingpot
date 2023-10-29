@@ -57,36 +57,56 @@ _ENABLE_DEBUG_OBSERVATIONS = False
 #BEGIN DEBUG
 divergent = False
 class Mode(Enum):
-    SINGLE = 1
-    MULTI = 2
-    MULTI_COORD = 3
-mode = Mode.SINGLE
+    SINGLE_EASY = 1
+    SINGLE_HARD = 2
+    MULTI_EASY = 3
+    MULTI_HARD = 4
+mode = Mode.SINGLE_HARD
 
 #END DEBUG
 
-if mode == Mode.SINGLE:
+if mode == Mode.SINGLE_EASY:
     ASCII_MAP = """
 F
 P
 B
 """
     num_agents = 1
+    maxAppleGrowthRate=1.0
+    thresholdDepletion=0.75
+    thresholdRestoration=0.5
 # 1x3
 # x sprite size = 8
 # 8x24 -> 64x64
 
-elif mode == Mode.MULTI:
+if mode == Mode.SINGLE_HARD:
+    ASCII_MAP = """
+FFFF
+P   
+   P
+BBBB
+"""
+    num_agents = 1    
+    maxAppleGrowthRate=0.25
+    thresholdDepletion=1.0
+    thresholdRestoration=0.75
+# 4x4
+
+elif mode == Mode.MULTI_EASY:
     ASCII_MAP = """
 FF
 PP
 BB
 """
     num_agents = 2
+    maxAppleGrowthRate=1.0
+    thresholdDepletion=0.75
+    thresholdRestoration=0.5
 # 3x2
 # x sprite size = 8
 # 16x24 -> 64x64
 
-elif mode == Mode.MULTI_COORD:
+elif mode == Mode.MULTI_HARD:
     ASCII_MAP = """
 FFFF
 P   
@@ -94,6 +114,9 @@ P
 BBBB
 """
     num_agents = 2
+    maxAppleGrowthRate=1.0
+    thresholdDepletion=0.75
+    thresholdRestoration=0.5
 # 4x4
 # x sprite size = 8
 # 32x32 -> 64x64
@@ -437,9 +460,9 @@ POTENTIAL_APPLE = {
                 # "maxAppleGrowthRate": 0.05,#multiplied by the fraction of dirt in the river to get probability. Less dirt means higher apple regrowth rate.
                 # "thresholdDepletion": 0.4,#apples stop growing when dirt exceeds this percentage
                 # "thresholdRestoration": 0.0,#apples grow at max when dirt grows below this percentage
-                "maxAppleGrowthRate": 1.0,
-                "thresholdDepletion": 0.75,
-                "thresholdRestoration": 0.5,
+                "maxAppleGrowthRate": maxAppleGrowthRate,
+                "thresholdDepletion": thresholdDepletion,
+                "thresholdRestoration": thresholdRestoration,
             }
         }
     ]
