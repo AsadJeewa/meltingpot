@@ -66,6 +66,8 @@ setuptools.setup(
         'pygame',
         'rx',
         'tensorflow-macos' if IS_M1_MAC else 'tensorflow',
+        'shimmy',
+        'pymunk'
     ],
     extras_require={
         # Dependencies required for rllib example.
@@ -80,7 +82,7 @@ setuptools.setup(
             'dm-tree',
             'gym',
             'matplotlib',
-            'pettingzoo>=1.18.0',
+            'pettingzoo==1.23.1',
             'stable-baselines3',
             'supersuit>=3.3.0',
             'torch',
