@@ -23,7 +23,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--exp_name", type=str, default=os.path.basename(__file__).rstrip(".py"),
         help="the name of this experiment")
-    parser.add_argument("--seed", type=int, default=1,
+    parser.add_argument("--seed", type=int, default=random.randint(0,np.iinfo(np.int32).max),
         help="seed of the experiment")
     # Algorithm specific arguments
     parser.add_argument("--env_id", type=str, default="clean_up_simple",
