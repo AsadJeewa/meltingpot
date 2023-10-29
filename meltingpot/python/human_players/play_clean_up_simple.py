@@ -34,8 +34,7 @@ environment_configs = {
 _ACTION_MAP = {
     'move': level_playing_utils.get_direction_pressed,
     'turn': level_playing_utils.get_turn_pressed,
-    'fireZap': level_playing_utils.get_key_number_one_pressed,
-    'fireClean': level_playing_utils.get_key_number_two_pressed,
+    'fireClean': level_playing_utils.get_key_number_one_pressed,
 }
 
 

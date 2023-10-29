@@ -60,7 +60,8 @@ class Mode(Enum):
     SINGLE = 1
     MULTI = 2
     MULTI_COORD = 3
-mode = Mode.MULTI_COORD
+mode = Mode.SINGLE
+
 #END DEBUG
 
 if mode == Mode.SINGLE:
@@ -639,7 +640,7 @@ def create_scene():
           {
               "component": "DirtSpawner",
               "kwargs": {
-                  "dirtSpawnProbability": 0.5,
+                  "dirtSpawnProbability": 1.0,
                   "delayStartOfDirtSpawning": 0,
               },
           },
