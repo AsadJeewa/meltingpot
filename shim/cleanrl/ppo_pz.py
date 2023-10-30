@@ -15,7 +15,9 @@ import os
 import random
 from distutils.util import strtobool
 import time
-#currently based on https://github.com/vwxyzjn/cleanrl/blob/master/cleanrl/ppo_atari.py
+import gymnasium as gym
+#currently based on https://github.c    om/vwxyzjn/cleanrl/blob/master/cleanrl/ppo_atari.py
+#https://pettingzoo.farama.org/tutorials/cleanrl/implementing_PPO/
 
 #BEGIN DEBUG
 #END DEBUG
@@ -38,6 +40,8 @@ def parse_args():
         help="the learning rate of the optimizer")
     parser.add_argument("--epochs", type=int, default=3,
         help="the K epochs to update the policy")
+    parser.add_argument("--norm_adv", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
+        help="Toggles advantages normalization")
     parser.add_argument("--num_steps", type=int, default=1000,
         help="the number of steps to run in each environment per policy rollout")
     parser.add_argument("--num_stacked", type=int, default=4,
@@ -48,7 +52,20 @@ def parse_args():
         help="if toggled, pz environment is used instead of mpot")
     parser.add_argument("--prosocial", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
         help="if toggled, prosocial training")
-    
+    parser.add_argument("--gamma", type=float, default=0.99,
+        help="the discount factor gamma")
+    parser.add_argument("--ent_coef", type=float, default=0.1,#default 0.01
+        help="coefficient of the entropy")
+    parser.add_argument("--vf_coef", type=float, default=0.1,#default=0.5
+        help="coefficient of the value function")
+    parser.add_argument("--clip_coef", type=float, default=0.1,
+        help="the surrogate clipping coefficient")
+    parser.add_argument("--clip_vloss", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
+        help="Toggles whether or not to use a clipped loss for the value function, as per the paper.")
+    parser.add_argument("--max-grad-norm", type=float, default=0.5,
+        help="the maximum norm for the gradient clipping")
+    parser.add_argument("--target-kl", type=float, default=None,
+        help="the target KL divergence threshold")
     args = parser.parse_args()
     return args
 
@@ -104,13 +121,13 @@ class PPO(nn.Module):
         probs = Categorical(logits=logits) # create a distribution
         if action is None:
             action = probs.sample()
-        return action, probs.log_prob(action), probs.entropy(), self.critic(hidden) #actions, logprobs, _, values 
+        return action, probs.log_prob(action), probs.entropy(), self.critic(hidden) #actions, logprobs, _, values
 
 
 def batchify_obs(obs, device):#stack agents
-    """Converts PZ style observations to batch of torch arrays."""    
+    """Converts PZ style observations to batch of torch arrays."""
     # convert to list of np arrays
-    # if mpot: 
+    # if mpot:
         # print(obs["player_0"]["RGB"].shape)
         # obs = np.stack([obs[a]['RGB'] for a in obs], axis=0)#each agent
         #store only values and ignore keys
@@ -155,7 +172,7 @@ if __name__ == "__main__":
     batch_size = args.batch_size
     total_timesteps = args.timesteps
     num_epochs = args.epochs
-  
+
     # TRY NOT TO MODIFY: seeding
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -163,21 +180,22 @@ if __name__ == "__main__":
     torch.backends.cudnn.deterministic = True
     torch.use_deterministic_algorithms(True)
 
-    if pz: 
+    if pz:
         num_steps = 125
     else:
         num_steps = args.num_steps #default 1000
         # frame_size = (88, 88)
         # stack_size = 3
-    
+
     frame_size = (args.frame_size, args.frame_size)
     stack_size = args.num_stacked
 
     """ ENV SETUP """
     if pz:
-        env = pistonball_v6.parallel_env(
-            render_mode="None", continuous=False, max_cycles=num_steps
-        )
+        # env = pistonball_v6.parallel_env(
+        #     render_mode="None", continuous=False, max_cycles=num_steps
+        # )
+        env = gym.make("BreakoutNoFrameskip-v4")
     else:
         env = load_meltingpot(args.env_id)
         env = MeltingPotCompatibilityV0(env, render_mode="None")
@@ -210,7 +228,7 @@ if __name__ == "__main__":
         rb_logprobs = torch.zeros((num_agents)).to(device)
         rb_rewards = torch.zeros((num_agents)).to(device)
         rb_terms = torch.zeros((num_agents)).to(device)
-        rb_values = torch.zeros((num_agents)).to(device)#for each agent 
+        rb_values = torch.zeros((num_agents)).to(device)#for each agent
     else:
     '''
     rb_obs = torch.zeros((num_steps, num_agents, stack_size, *frame_size)).to(device)#EPISODE
@@ -218,11 +236,15 @@ if __name__ == "__main__":
     rb_logprobs = torch.zeros((num_steps, num_agents)).to(device)
     rb_rewards = torch.zeros((num_steps, num_agents)).to(device)
     rb_terms = torch.zeros((num_steps, num_agents)).to(device)
-    rb_values = torch.zeros((num_steps, num_agents)).to(device)#for each agent 
+    rb_values = torch.zeros((num_steps, num_agents)).to(device)#for each agent
 
     """ TRAINING LOGIC """
     # train for n number of episodes
     tb = SummaryWriter(log_dir="runs/"+exp_name)
+    tb.add_text(
+        "hyperparameters",
+        "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
+    )
 
     num_updates = total_timesteps // num_steps
     step_count = 0
@@ -233,22 +255,22 @@ if __name__ == "__main__":
             # collect observations and convert to batch of torch tensors
             next_obs, info = env.reset(seed=args.seed)
             # reset the episodic return
-            total_episodic_return = 0            
+            total_episodic_return = 0
             # each episode has num_steps
             terminated = False
             for step in range(0, num_steps):
                 step_count+=1
                 # rollover the observation
-                obs = batchify_obs(next_obs, device) # for torch 
+                obs = batchify_obs(next_obs, device) # for torch
                 # get action from the agent
                 actions, logprobs, _, values = ppo.get_action_and_value(obs)
                 # execute the environment and log data
                 next_obs, rewards, terms, truncs, infos = env.step(
                     unbatchify(actions, env) # for PZ
                 )
+
                 # add to episode storage
                 rb_obs[step] = obs #BUFFER STORES EACH TRANSITION
-                # print(rewards)
                 rb_rewards[step] = batchify(rewards, device) #each agent separate
                 #ONE EPISODE AT AT TIME
                 if args.prosocial:
@@ -290,7 +312,7 @@ if __name__ == "__main__":
         b_values = torch.flatten(rb_values[:end_step], start_dim=0, end_dim=1)
         b_advantages = torch.flatten(rb_advantages[:end_step], start_dim=0, end_dim=1)
         #SAMPLE FROM BUFFER AND UPDATE NETWORKS (Learner)
-        
+
         # Optimizing the policy and value network
         b_index = np.arange(len(b_obs))
         clip_fracs = []
@@ -300,7 +322,7 @@ if __name__ == "__main__":
             # shuffle the indices we use to access the data
             np.random.shuffle(b_index)
             #SHUFFLE FOR TRAINING
-            for start in range(0, len(b_obs), batch_size):#minibatch
+            for start in range(0, len(b_obs) , batch_size):#minibatch
                 # select the indices we want to train on
                 end = start + batch_size
                 batch_index = b_index[start:end]
@@ -318,11 +340,11 @@ if __name__ == "__main__":
                         ((ratio - 1.0).abs() > clip_coef).float().mean().item()
                     ]
 
-                # normalize advantaegs
-                advantages = b_advantages[batch_index]
-                advantages = (advantages - advantages.mean()) / (
-                    advantages.std() + 1e-8
-                )
+                if args.norm_adv: # normalize advantaegs
+                    advantages = b_advantages[batch_index]
+                    advantages = (advantages - advantages.mean()) / (
+                        advantages.std() + 1e-8
+                    )
 
                 # Policy loss
                 pg_loss1 = -b_advantages[batch_index] * ratio

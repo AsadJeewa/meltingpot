@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from shim.cleanrl_mappo_shared import MAPPO, batchify_obs
+from shim.mappo_shared import MAPPO, batchify_obs
 from supersuit import color_reduction_v0, frame_stack_v1, resize_v1
 
 #DEBUG START
