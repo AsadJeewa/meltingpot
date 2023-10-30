@@ -155,7 +155,7 @@ if __name__ == "__main__":
     torch.backends.cudnn.deterministic = True
     torch.use_deterministic_algorithms(True)
 
-    device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     num_steps = args.num_steps #default 1000
     frame_size = (args.frame_size, args.frame_size)
