@@ -30,7 +30,7 @@ def parse_args():
     # Algorithm specific arguments
     parser.add_argument("--env_id", type=str, default="clean_up_simple",
         help="the id of the environment")
-    parser.add_argument("--total_timesteps", type=int, default=2e6,
+    parser.add_argument("--total_timesteps", type=int, default=1e7,
         help="total timesteps of the experiments")
     parser.add_argument("--batch_size", type=int, default=32,
         help="batch size")
