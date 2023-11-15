@@ -140,6 +140,7 @@ def unbatchify(x, env):
     return x
     
 if __name__ == "__main__":
+    current_best = 0
     args = parse_args()
     exp_name = f"{args.exp_name}__{args.env_id}__{args.seed}__{int(time.time())}"
     writer = SummaryWriter(log_dir="runs/"+exp_name)
@@ -305,6 +306,11 @@ if __name__ == "__main__":
         y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
+
+        if total_episodic_return > current_best:
+            torch.save(agent.actor.state_dict(), "model/"+exp_name)
+            current_best = total_episodic_return
+            print("save")
 
         print(f"Episodic Return: {np.mean(total_episodic_return)}")
         writer.add_scalar("mean_episodic_return",np.mean(total_episodic_return), global_step)
