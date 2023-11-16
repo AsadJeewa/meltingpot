@@ -191,6 +191,7 @@ if __name__ == "__main__":
     num_updates = int(args.total_timesteps // num_steps)#2e6 is float
 
     for update in range(1, num_updates + 1):
+        agent.actor.eval()
         print("COLLECTING EXPERIENCE")
         # Annealing the rate if instructed to do so.
         if args.anneal_lr:
@@ -249,6 +250,7 @@ if __name__ == "__main__":
         # Optimizing the policy and value network
         b_inds = np.arange(len(b_obs))
 
+        agent.actor.train()
         print("TRAINING")
         clipfracs = []
         for epoch in range(args.epochs):

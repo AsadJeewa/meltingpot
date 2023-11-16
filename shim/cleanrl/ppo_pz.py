@@ -249,6 +249,7 @@ if __name__ == "__main__":
     num_updates = total_timesteps // num_steps
     step_count = 0
     for update in range(1, int(num_updates) + 1):
+        ppo.actor.eval()
         print("COLLECTING EXPERIENCE")
         # collect an episode
         with torch.no_grad():
@@ -317,6 +318,7 @@ if __name__ == "__main__":
         b_index = np.arange(len(b_obs))
         clip_fracs = []
 
+        ppo.actor.train()#TODO Check
         print("TRAINING")
         for repeat in range(num_epochs):#epochs
             # shuffle the indices we use to access the data
@@ -401,7 +403,7 @@ if __name__ == "__main__":
     env = resize_v1(env, 64, 64)
     env = frame_stack_v1(env, stack_size=4)
 
-    ppo.eval()
+    ppo.actor.eval()
 
     with torch.no_grad():
         # render 5 episodes out
