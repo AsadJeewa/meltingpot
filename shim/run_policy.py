@@ -1,9 +1,11 @@
 import torch
 import numpy as np
-from shim.mappo_shared import MAPPO, batchify_obs
+from shim.cleanrl.mappo_shared import MAPPO, batchify_obs
+from shim.cleanrl.ppo import PPO, batchify_obs
 from supersuit import color_reduction_v0, frame_stack_v1, resize_v1
 
 #DEBUG START
+ma = False
 load_model = True
 pz  = False
 frame_size = (64, 64)
@@ -31,27 +33,36 @@ if load_model:
         # exp_name = "gpu_ctde_state_4x4__clean_up_simple__1__1695335842"
         # exp_name = "gpu_ctde_state_4x4_divergent__clean_up_simple__1__1695350009"
 
-        exp_name = "sanity_single__clean_up_simple__3__1698623132"
+        exp_name = "save_ppo_single_easy__clean_up_simple__1933059180__1700078728"
+        # exp_name = "save_full_ppo_single_hard__clean_up_simple__121193687__1700102084"
         # exp_name = "noturn_gpu_ctde_state_multicoord__clean_up_simple__1__1697719103"
 
-        modeldir = "model/TO PRESENT/"+exp_name
-        mappo = MAPPO(env.action_space(env.possible_agents[0]).n)
-        print(env.action_space(env.possible_agents[0]).n)
+        modeldir = "model/TO PRESENT/"
+        if ma:
+            ppo = MAPPO(env.action_space(env.possible_agents[0]).n)
+        else:
+            ppo = PPO(env.action_space(env.possible_agents[0]).n)#MAPPO 
+        print("****",env.action_space(env.possible_agents[0]).n)
         # exit()
-        # print("INIT")
-        # for param in mappo.actor.parameters():
-        #     print(param.data)
-        # print("LOAD WEIGHTS")
-        mappo.actor.load_state_dict(torch.load(modeldir,  map_location=torch.device('cpu')))
-        for param in mappo.actor.parameters():
+        print("INIT")
+        for param in ppo.actor.parameters():
+            print(param.data)
+            print(param.data.shape)
+        print("LOAD WEIGHTS")
+        # ppo.feature_extractor.load_state_dict(torch.load(modeldir+"feat_"+exp_name,  map_location=torch.device('cpu')))
+        ppo.actor.load_state_dict(torch.load(modeldir+"actor_"+exp_name,  map_location=torch.device('cpu')))
+        for param in ppo.actor.parameters():
             print(param.data)
         # exit()
-        # mappo.actor.eval()
+        ppo.actor.eval()
 
 while env.agents:
     if load_model:
         obs = batchify_obs(observations,"cpu")
-        actions, logprobs, _, values = mappo.get_actions_and_values(obs,len(env.possible_agents))
+        if ma:
+            actions, logprobs, _, values = ppo.get_actions_and_values(obs,len(env.possible_agents))
+        else:
+            actions, logprobs, _, values = ppo.get_action_and_value(obs)
         actions = dict(zip(env.agents, actions))
     else: 
         actions = {agent: env.action_space(agent).sample() for agent in env.agents}
