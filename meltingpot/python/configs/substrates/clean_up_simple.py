@@ -54,59 +54,87 @@ PrefabConfig = game_object_utils.PrefabConfig
 # Warning: setting `_ENABLE_DEBUG_OBSERVATIONS = True` may cause slowdown.
 _ENABLE_DEBUG_OBSERVATIONS = False
 
-#BEGIN DEBUG
-divergent = False
 class Mode(Enum):
-    SINGLE_EASY = 1
-    SINGLE_HARD = 2
-    MULTI_EASY = 3
-    MULTI_HARD = 4
-mode = Mode.SINGLE_HARD
+    SINGLE_0 = 1
+    SINGLE_1 = 2
+    SINGLE_2 = 3
+    MULTI_0 = 4
+    MULTI_1 = 5
+
+#BEGIN DEBUG
+
+divergent = False
+mode = Mode.SINGLE_2
 
 #END DEBUG
 
-if mode == Mode.SINGLE_EASY:
+if mode == Mode.SINGLE_0:
     ASCII_MAP = """
 F
 P
 B
 """
     num_agents = 1
+    num_steps = 100
     maxAppleGrowthRate=1.0
     thresholdDepletion=0.75
     thresholdRestoration=0.5
+    dirtSpawnProbability=1.0
 # 1x3
 # x sprite size = 8
 # 8x24 -> 64x64
 
-if mode == Mode.SINGLE_HARD:
+elif mode == Mode.SINGLE_1:
     ASCII_MAP = """
 FFFF
 P   
    P
 BBBB
 """
-    num_agents = 1    
+    num_agents = 1   
+    num_steps = 1000 
     maxAppleGrowthRate=0.25
     thresholdDepletion=1.0
     thresholdRestoration=0.75
+    dirtSpawnProbability=1.0
 # 4x4
 
-elif mode == Mode.MULTI_EASY:
+elif mode == Mode.SINGLE_2:
+    ASCII_MAP = """
+FFFFFFFF
+P       
+        
+        
+        
+        
+       P
+BBBBBBBB
+"""
+    num_agents = 1   
+    num_steps = 1000 
+    maxAppleGrowthRate=0.125
+    thresholdDepletion=1.0
+    thresholdRestoration=0.0
+    dirtSpawnProbability=0.25
+# 8x8
+
+elif mode == Mode.MULTI_0:
     ASCII_MAP = """
 FF
 PP
 BB
 """
     num_agents = 2
+    num_steps = 1000
     maxAppleGrowthRate=1.0
     thresholdDepletion=0.75
     thresholdRestoration=0.5
+    dirtSpawnProbability=1.0
 # 3x2
 # x sprite size = 8
 # 16x24 -> 64x64
 
-elif mode == Mode.MULTI_HARD:
+elif mode == Mode.MULTI_1:
     ASCII_MAP = """
 FFFF
 P   
@@ -114,6 +142,7 @@ P
 BBBB
 """
     num_agents = 2
+    num_steps = 1000
     maxAppleGrowthRate=1.0
     thresholdDepletion=0.75
     thresholdRestoration=0.5
@@ -663,16 +692,16 @@ def create_scene():
           {
               "component": "DirtSpawner",
               "kwargs": {
-                  "dirtSpawnProbability": 1.0,
+                  "dirtSpawnProbability": dirtSpawnProbability,
                   "delayStartOfDirtSpawning": 0,
               },
           },
           {
               "component": "StochasticIntervalEpisodeEnding",
               "kwargs": {
-                  "minimumFramesPerEpisode": 1000,
-                  "intervalLength": 100,  # Set equal to unroll length.
-                  "probabilityTerminationPerInterval": 0.2
+                  "minimumFramesPerEpisode": num_steps,
+                  "intervalLength": 1,  # Set equal to unroll length. CHECK
+                  "probabilityTerminationPerInterval": 1.0
               }
           },
           {
