@@ -72,7 +72,7 @@ class MAPPO(nn.Module):
         # else:
         # MAKE CTDE
         #feature extractor
-        self.network = nn.Sequential(
+        self.feature_extractor = nn.Sequential(
             self._layer_init(nn.Conv2d(4, 32, 3, padding=1)),#pixel observations, out channels 32
             nn.MaxPool2d(2),
             nn.ReLU(),
@@ -95,7 +95,7 @@ class MAPPO(nn.Module):
         return layer
 
     def get_values(self, x):
-        return self.critic(self.network(x / 255.0))# get value of state for each agent
+        return self.critic(self.feature_extractor(x / 255.0))# get value of state for each agent
 
     def get_actions_and_values(self, x, num_agents, device="cpu", actions=None):
         # x is combined observations
@@ -104,7 +104,7 @@ class MAPPO(nn.Module):
         if actions is None:
             actions = torch.zeros(num_agents).to(device)
             genActions = True
-        hidden_all = self.network(x / 255.0)
+        hidden_all = self.feature_extractor(x / 255.0)
         #TODO Add param for parameter sharing
         for i in range(upper_bound):
             # NAN ISSUE
@@ -238,9 +238,11 @@ if __name__ == "__main__":
     num_updates = total_timesteps // num_steps
     step_count = 0
     for update in range(1, int(num_updates) + 1):
-        mappo.actor.eval()
         print("COLLECTING EXPERIENCE")
         # collect an episode
+        mappo.feature_extractor.eval()
+        mappo.actor.eval()
+        mappo.critic.eval()
         with torch.no_grad():
             # collect observations and convert to batch of torch tensors
             next_obs, info = env.reset(seed=args.seed)
@@ -308,7 +310,9 @@ if __name__ == "__main__":
         b_index = np.arange(len(b_obs))
         clip_fracs = []
 
+        mappo.feature_extractor.train()
         mappo.actor.train()
+        mappo.critic.train()
         print("TRAINING")#ON COLLECTED EXPERIENCE
         for repeat in range(num_epochs):#pass over batch n times
             # shuffle the indices we use to access the data
@@ -367,7 +371,8 @@ if __name__ == "__main__":
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
-        torch.save(mappo.actor.state_dict(), "model/"+exp_name)
+        torch.save(mappo.feature_extractor.state_dict(), "model/feat_"+exp_name)
+        torch.save(mappo.actor.state_dict(), "model/actor_"+exp_name)
         print("save")
 
         print(f"Mean Episodic Return: {np.mean(total_episodic_return)}")

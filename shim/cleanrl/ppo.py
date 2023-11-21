@@ -76,7 +76,7 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
 class Agent(nn.Module):
     def __init__(self, num_actions):
         super().__init__()
-        self.network = nn.Sequential(
+        self.feature_extractor = nn.Sequential(
             # layer_init(nn.Conv2d(4, 32, 8, stride=4)),
             # #no maxpool
             # nn.ReLU(),
@@ -106,10 +106,10 @@ class Agent(nn.Module):
         self.critic = layer_init(nn.Linear(512, 1), std=1)
 
     def get_value(self, x):
-        return self.critic(self.network(x / 255.0))
+        return self.critic(self.feature_extractor(x / 255.0))
 
     def get_action_and_value(self, x, action=None):
-        hidden = self.network(x / 255.0)
+        hidden = self.feature_extractor(x / 255.0)
         logits = self.actor(hidden)
         probs = Categorical(logits=logits)
         if action is None:
@@ -191,7 +191,6 @@ if __name__ == "__main__":
     num_updates = int(args.total_timesteps // num_steps)#2e6 is float
 
     for update in range(1, num_updates + 1):
-        agent.actor.eval()
         print("COLLECTING EXPERIENCE")
         # Annealing the rate if instructed to do so.
         if args.anneal_lr:
@@ -211,6 +210,9 @@ if __name__ == "__main__":
             obs[step] = batchify_obs(next_obs, device)
             terms[step] = batchify(next_term, device)
             # ALGO LOGIC: action logic
+            agent.feature_extractor.eval() #TODO Check
+            agent.actor.eval() #TODO Check
+            agent.critic.eval() #TODO Check
             with torch.no_grad():
                 action, logprob, _, value = agent.get_action_and_value(obs[step])
                 values[step] = value.flatten()
@@ -220,7 +222,7 @@ if __name__ == "__main__":
             # TRY NOT TO MODIFY: execute the game and log data.
             next_obs, reward, term, trunc, info = env.step(unbatchify(action, env))
             rewards[step] = batchify(reward, device)
-            total_episodic_return+= rewards[step].cpu().numpy()
+            total_episodic_return += rewards[step].cpu().numpy()
 
         # bootstrap value if not done
         with torch.no_grad():
@@ -250,7 +252,9 @@ if __name__ == "__main__":
         # Optimizing the policy and value network
         b_inds = np.arange(len(b_obs))
 
+        agent.feature_extractor.train()
         agent.actor.train()
+        agent.critic.train()
         print("TRAINING")
         clipfracs = []
         for epoch in range(args.epochs):
@@ -310,12 +314,13 @@ if __name__ == "__main__":
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
         if total_episodic_return > current_best:
-            torch.save(agent.actor.state_dict(), "model/"+exp_name)
+            torch.save(agent.feature_extractor.state_dict(), "model/feat_"+exp_name)
+            torch.save(agent.actor.state_dict(), "model/actor_"+exp_name)
             current_best = total_episodic_return
             print("save")
 
-        print(f"Episodic Return: {np.mean(total_episodic_return)}")
-        writer.add_scalar("mean_episodic_return",np.mean(total_episodic_return), global_step)
+        print(f"Episodic Return: {total_episodic_return}")
+        writer.add_scalar("mean_episodic_return",total_episodic_return, global_step)
 
         print(f"Episode Length: {global_step}")
         print(f"Value Loss: {v_loss.item()}")

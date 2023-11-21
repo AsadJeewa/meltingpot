@@ -90,7 +90,7 @@ class PPO(nn.Module):
         #     )
         # else:
         #feature extractor
-        self.network = nn.Sequential(
+        self.feature_extractor = nn.Sequential(
             self._layer_init(nn.Conv2d(4, 32, 3, padding=1)),#pixel observations, out channels 32
             nn.MaxPool2d(2),
             nn.ReLU(),
@@ -113,10 +113,10 @@ class PPO(nn.Module):
         return layer
 
     def get_value(self, x):
-        return self.critic(self.network(x / 255.0))# get value of state for each agent
+        return self.critic(self.feature_extractor(x / 255.0))# get value of state for each agent
 
     def get_action_and_value(self, x, action=None):
-        hidden = self.network(x / 255.0)
+        hidden = self.feature_extractor(x / 255.0)
         logits = self.actor(hidden) #probabilities
         probs = Categorical(logits=logits) # create a distribution
         if action is None:
@@ -249,7 +249,9 @@ if __name__ == "__main__":
     num_updates = total_timesteps // num_steps
     step_count = 0
     for update in range(1, int(num_updates) + 1):
+        ppo.feature_extractor.eval()
         ppo.actor.eval()
+        ppo.critic.eval()
         print("COLLECTING EXPERIENCE")
         # collect an episode
         with torch.no_grad():
@@ -318,7 +320,9 @@ if __name__ == "__main__":
         b_index = np.arange(len(b_obs))
         clip_fracs = []
 
-        ppo.actor.train()#TODO Check
+        ppo.feature_extractor.train()
+        ppo.actor.train()
+        ppo.critic.train()
         print("TRAINING")
         for repeat in range(num_epochs):#epochs
             # shuffle the indices we use to access the data
@@ -377,7 +381,8 @@ if __name__ == "__main__":
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
-        torch.save(ppo.actor.state_dict(), "model/"+exp_name)
+        torch.save(ppo.feature_extractor.state_dict(), "model/feat_"+exp_name)
+        torch.save(ppo.actor.state_dict(), "model/actor_"+exp_name)
         print("save")
 
         print(f"Episodic Return: {np.mean(total_episodic_return)}")
