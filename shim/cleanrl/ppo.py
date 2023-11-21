@@ -5,7 +5,6 @@ import random
 import time
 from distutils.util import strtobool
 
-import gym
 import numpy as np
 import torch
 import torch.nn as nn
@@ -13,6 +12,7 @@ import torch.optim as optim
 from torch.distributions.categorical import Categorical
 from torch.utils.tensorboard import SummaryWriter
 
+from utils import batchify_obs, batchify, unbatchify
 from supersuit import color_reduction_v0, frame_stack_v1, resize_v1
 from shimmy import MeltingPotCompatibilityV0
 from shimmy.utils.meltingpot import load_meltingpot
@@ -73,21 +73,10 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     return layer
 
 
-class Agent(nn.Module):
+class PPO(nn.Module):
     def __init__(self, num_actions):
         super().__init__()
         self.feature_extractor = nn.Sequential(
-            # layer_init(nn.Conv2d(4, 32, 8, stride=4)),
-            # #no maxpool
-            # nn.ReLU(),
-            # layer_init(nn.Conv2d(32, 64, 4, stride=2)),
-            # nn.ReLU(),
-            # layer_init(nn.Conv2d(64, 64, 3, stride=1)),
-            # nn.ReLU(),
-            # nn.Flatten(),
-            # layer_init(nn.Linear(16, 512)),#from 84x84 to 64x64
-            # nn.ReLU(),
-
             layer_init(nn.Conv2d(4, 32, 3, padding=1)),#pixel observations, out channels 32
             nn.MaxPool2d(2),
             nn.ReLU(),
@@ -115,29 +104,6 @@ class Agent(nn.Module):
         if action is None:
             action = probs.sample()
         return action, probs.log_prob(action), probs.entropy(), self.critic(hidden)
-    
-def batchify_obs(obs, device):#stack agents
-    """Converts PZ style observations to batch of torch arrays."""
-    obs = np.stack([obs[a] for a in obs], axis=0)#store only values and ignore keys
-    # transpose to be (batch, channel, height, width)
-    obs = obs.transpose(0, -1, 1, 2)
-    # convert to torch
-    obs = torch.tensor(obs).to(device)
-    return obs
-
-def batchify(x, device):
-    """Converts PZ style returns to batch of torch arrays."""
-    # convert to list of np arrays
-    x = np.stack([x[a] for a in x], axis=0)
-    # convert to torch
-    x = torch.tensor(x).to(device)
-    return x
-
-def unbatchify(x, env):
-    """Converts np array to PZ style arguments."""
-    x = x.cpu().numpy()
-    x = {a: x[i] for i, a in enumerate(env.possible_agents)}
-    return x
     
 if __name__ == "__main__":
     current_best = 0
@@ -173,8 +139,8 @@ if __name__ == "__main__":
     num_actions = env.action_space(env.possible_agents[0]).n
     observation_size = env.observation_space(env.possible_agents[0]).shape
 
-    agent = Agent(num_actions).to(device)
-    optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
+    ppo = PPO(num_actions).to(device)
+    optimizer = optim.Adam(ppo.parameters(), lr=args.learning_rate, eps=1e-5)
 
     total_episodic_return = 0
     # ALGO Logic: Storage setup
@@ -210,11 +176,11 @@ if __name__ == "__main__":
             obs[step] = batchify_obs(next_obs, device)
             terms[step] = batchify(next_term, device)
             # ALGO LOGIC: action logic
-            agent.feature_extractor.eval() #TODO Check
-            agent.actor.eval() #TODO Check
-            agent.critic.eval() #TODO Check
+            ppo.feature_extractor.eval() #TODO Check
+            ppo.actor.eval() #TODO Check
+            ppo.critic.eval() #TODO Check
             with torch.no_grad():
-                action, logprob, _, value = agent.get_action_and_value(obs[step])
+                action, logprob, _, value = ppo.get_action_and_value(obs[step])
                 values[step] = value.flatten()
             actions[step] = action
             logprobs[step] = logprob
@@ -226,7 +192,7 @@ if __name__ == "__main__":
 
         # bootstrap value if not done
         with torch.no_grad():
-            next_value = agent.get_value(obs[step]).reshape(1, -1)
+            next_value = ppo.get_value(obs[step]).reshape(1, -1)
             advantages = torch.zeros_like(rewards).to(device)
             lastgaelam = 0
             for t in reversed(range(args.num_steps)):
@@ -252,9 +218,9 @@ if __name__ == "__main__":
         # Optimizing the policy and value network
         b_inds = np.arange(len(b_obs))
 
-        agent.feature_extractor.train()
-        agent.actor.train()
-        agent.critic.train()
+        ppo.feature_extractor.train()
+        ppo.actor.train()
+        ppo.critic.train()
         print("TRAINING")
         clipfracs = []
         for epoch in range(args.epochs):
@@ -263,7 +229,7 @@ if __name__ == "__main__":
                 end = start + args.batch_size
                 mb_inds = b_inds[start:end]
 
-                _, newlogprob, entropy, newvalue = agent.get_action_and_value(b_obs[mb_inds], b_actions.long()[mb_inds])
+                _, newlogprob, entropy, newvalue = ppo.get_action_and_value(b_obs[mb_inds], b_actions.long()[mb_inds])
                 logratio = newlogprob - b_logprobs[mb_inds]
                 ratio = logratio.exp()
 
@@ -302,7 +268,7 @@ if __name__ == "__main__":
 
                 optimizer.zero_grad()
                 loss.backward()
-                nn.utils.clip_grad_norm_(agent.parameters(), args.max_grad_norm)
+                nn.utils.clip_grad_norm_(ppo.parameters(), args.max_grad_norm)
                 optimizer.step()
 
             if args.target_kl is not None:
@@ -314,8 +280,8 @@ if __name__ == "__main__":
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
         if total_episodic_return > current_best:
-            torch.save(agent.feature_extractor.state_dict(), "model/feat_"+exp_name)
-            torch.save(agent.actor.state_dict(), "model/actor_"+exp_name)
+            torch.save(ppo.feature_extractor.state_dict(), "model/feat_"+exp_name)
+            torch.save(ppo.actor.state_dict(), "model/actor_"+exp_name)
             current_best = total_episodic_return
             print("save")
 

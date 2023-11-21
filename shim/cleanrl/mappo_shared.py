@@ -5,14 +5,16 @@ import torch.optim as optim
 from supersuit import color_reduction_v0, frame_stack_v1, resize_v1
 from torch.distributions.categorical import Categorical
 from torch.utils.tensorboard import SummaryWriter
-from shimmy import MeltingPotCompatibilityV0
-from shimmy.utils.meltingpot import load_meltingpot
 from pettingzoo.butterfly import pistonball_v6
 import argparse
 import os
 import random
 from distutils.util import strtobool
 import time
+
+from utils import batchify_obs, batchify, unbatchify
+from shimmy import MeltingPotCompatibilityV0
+from shimmy.utils.meltingpot import load_meltingpot
 
 #BEGIN DEBUG
 
@@ -53,25 +55,6 @@ def parse_args():
 class MAPPO(nn.Module):
     def __init__(self, num_actions):
         super().__init__()
-
-        # if mpot:
-        #     self.network = nn.Sequential(
-        #         self._layer_init(nn.Conv2d(3, 32, 3, padding=1)),#pixel observations, out channels 32
-        #         nn.MaxPool2d(2),
-        #         nn.ReLU(),
-        #         self._layer_init(nn.Conv2d(32, 64, 3, padding=1)),
-        #         nn.MaxPool2d(2),
-        #         nn.ReLU(),
-        #         self._layer_init(nn.Conv2d(64, 128, 3, padding=1)),
-        #         nn.MaxPool2d(2),
-        #         nn.ReLU(),
-        #         nn.Flatten(),
-        #         self._layer_init(nn.Linear(128 * 11 * 11, 512)),
-        #         nn.ReLU(),
-        #     )
-        # else:
-        # MAKE CTDE
-        #feature extractor
         self.feature_extractor = nn.Sequential(
             self._layer_init(nn.Conv2d(4, 32, 3, padding=1)),#pixel observations, out channels 32
             nn.MaxPool2d(2),
@@ -116,42 +99,6 @@ class MAPPO(nn.Module):
                 actions[i] = action
         actions = actions.int()
         return actions, probs.log_prob(actions), probs.entropy(), self.critic(hidden_all) #actions, logprobs, _, values 
-
-
-def batchify_obs(obs, device):#stack agents
-    """Converts PZ style observations to batch of torch arrays."""    
-    # convert to list of np arrays
-    # if mpot: 
-        # print(obs["player_0"]["RGB"].shape)
-        # obs = np.stack([obs[a]['RGB'] for a in obs], axis=0)#each agent
-        #store only values and ignore keys
-    # else:
-        # obs = np.stack([obs[a] for a in obs], axis=0)#store only values and ignore keys
-    obs = np.stack([obs[a] for a in obs], axis=0)#store only values and ignore keys
-    # transpose to be (batch, channel, height, width)
-    obs = obs.transpose(0, -1, 1, 2)
-    # convert to torch
-    obs = torch.tensor(obs).to(device)
-    return obs
-
-
-def batchify(x, device):
-    """Converts PZ style returns to batch of torch arrays."""
-    # convert to list of np arrays
-    x = np.stack([x[a] for a in x], axis=0)
-    # convert to torch
-    x = torch.tensor(x).to(device)
-
-    return x
-
-
-def unbatchify(x, env):
-    """Converts np array to PZ style arguments."""
-    x = x.cpu().numpy()
-    x = {a: x[i] for i, a in enumerate(env.possible_agents)}
-
-    return x
-
 
 if __name__ == "__main__":
     args = parse_args()
