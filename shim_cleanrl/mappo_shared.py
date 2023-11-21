@@ -5,21 +5,19 @@ import torch.optim as optim
 from supersuit import color_reduction_v0, frame_stack_v1, resize_v1
 from torch.distributions.categorical import Categorical
 from torch.utils.tensorboard import SummaryWriter
-from shimmy import MeltingPotCompatibilityV0
-from shimmy.utils.meltingpot import load_meltingpot
-from gymnasium.wrappers import GrayScaleObservation
 from pettingzoo.butterfly import pistonball_v6
-from datetime import datetime
 import argparse
 import os
 import random
 from distutils.util import strtobool
 import time
-import gymnasium as gym
-#currently based on https://github.c    om/vwxyzjn/cleanrl/blob/master/cleanrl/ppo_atari.py
-#https://pettingzoo.farama.org/tutorials/cleanrl/implementing_PPO/
+
+from utils import batchify_obs, batchify, unbatchify
+from shimmy import MeltingPotCompatibilityV0 #venv
+from shimmy.utils.meltingpot import load_meltingpot
 
 #BEGIN DEBUG
+
 #END DEBUG
 
 def parse_args():
@@ -40,8 +38,6 @@ def parse_args():
         help="the learning rate of the optimizer")
     parser.add_argument("--epochs", type=int, default=3,
         help="the K epochs to update the policy")
-    parser.add_argument("--norm_adv", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
-        help="Toggles advantages normalization")
     parser.add_argument("--num_steps", type=int, default=1000,
         help="the number of steps to run in each environment per policy rollout")
     parser.add_argument("--num_stacked", type=int, default=4,
@@ -52,44 +48,13 @@ def parse_args():
         help="if toggled, pz environment is used instead of mpot")
     parser.add_argument("--prosocial", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
         help="if toggled, prosocial training")
-    parser.add_argument("--gamma", type=float, default=0.99,
-        help="the discount factor gamma")
-    parser.add_argument("--ent_coef", type=float, default=0.1,#default 0.01
-        help="coefficient of the entropy")
-    parser.add_argument("--vf_coef", type=float, default=0.1,#default=0.5
-        help="coefficient of the value function")
-    parser.add_argument("--clip_coef", type=float, default=0.1,
-        help="the surrogate clipping coefficient")
-    parser.add_argument("--clip_vloss", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
-        help="Toggles whether or not to use a clipped loss for the value function, as per the paper.")
-    parser.add_argument("--max-grad-norm", type=float, default=0.5,
-        help="the maximum norm for the gradient clipping")
-    parser.add_argument("--target-kl", type=float, default=None,
-        help="the target KL divergence threshold")
+    
     args = parser.parse_args()
     return args
 
-class PPO(nn.Module):
+class MAPPO(nn.Module):
     def __init__(self, num_actions):
         super().__init__()
-
-        # if mpot:
-        #     self.network = nn.Sequential(
-        #         self._layer_init(nn.Conv2d(3, 32, 3, padding=1)),#pixel observations, out channels 32
-        #         nn.MaxPool2d(2),
-        #         nn.ReLU(),
-        #         self._layer_init(nn.Conv2d(32, 64, 3, padding=1)),
-        #         nn.MaxPool2d(2),
-        #         nn.ReLU(),
-        #         self._layer_init(nn.Conv2d(64, 128, 3, padding=1)),
-        #         nn.MaxPool2d(2),
-        #         nn.ReLU(),
-        #         nn.Flatten(),
-        #         self._layer_init(nn.Linear(128 * 11 * 11, 512)),
-        #         nn.ReLU(),
-        #     )
-        # else:
-        #feature extractor
         self.feature_extractor = nn.Sequential(
             self._layer_init(nn.Conv2d(4, 32, 3, padding=1)),#pixel observations, out channels 32
             nn.MaxPool2d(2),
@@ -104,7 +69,7 @@ class PPO(nn.Module):
             self._layer_init(nn.Linear(128 * 8 * 8, 512)),
             nn.ReLU(),
         )
-        self.actor = self._layer_init(nn.Linear(512, num_actions), std=0.01)#predict actions 0,1,2 for EACH agent (policy)
+        self.actor = self._layer_init(nn.Linear(512, num_actions), std=0.01)#predict actions 0,1,2 for one agent (policy)
         self.critic = self._layer_init(nn.Linear(512, 1))#predict value (given state)
 
     def _layer_init(self, layer, std=np.sqrt(2), bias_const=0.0):
@@ -112,52 +77,28 @@ class PPO(nn.Module):
         torch.nn.init.constant_(layer.bias, bias_const)
         return layer
 
-    def get_value(self, x):
+    def get_values(self, x):
         return self.critic(self.feature_extractor(x / 255.0))# get value of state for each agent
 
-    def get_action_and_value(self, x, action=None):
-        hidden = self.feature_extractor(x / 255.0)
-        logits = self.actor(hidden) #probabilities
-        probs = Categorical(logits=logits) # create a distribution
-        if action is None:
-            action = probs.sample()
-        return action, probs.log_prob(action), probs.entropy(), self.critic(hidden) #actions, logprobs, _, values
-
-
-def batchify_obs(obs, device):#stack agents
-    """Converts PZ style observations to batch of torch arrays."""
-    # convert to list of np arrays
-    # if mpot:
-        # print(obs["player_0"]["RGB"].shape)
-        # obs = np.stack([obs[a]['RGB'] for a in obs], axis=0)#each agent
-        #store only values and ignore keys
-    # else:
-        # obs = np.stack([obs[a] for a in obs], axis=0)#store only values and ignore keys
-    obs = np.stack([obs[a] for a in obs], axis=0)#store only values and ignore keys
-    # transpose to be (batch, channel, height, width)
-    obs = obs.transpose(0, -1, 1, 2)
-    # convert to torch
-    obs = torch.tensor(obs).to(device)
-    return obs
-
-
-def batchify(x, device):
-    """Converts PZ style returns to batch of torch arrays."""
-    # convert to list of np arrays
-    x = np.stack([x[a] for a in x], axis=0)
-    # convert to torch
-    x = torch.tensor(x).to(device)
-
-    return x
-
-
-def unbatchify(x, env):
-    """Converts np array to PZ style arguments."""
-    x = x.cpu().numpy()
-    x = {a: x[i] for i, a in enumerate(env.possible_agents)}
-
-    return x
-
+    def get_actions_and_values(self, x, num_agents, device="cpu", actions=None):
+        # x is combined observations
+        upper_bound = x.shape[0]#batch size
+        genActions = False
+        if actions is None:
+            actions = torch.zeros(num_agents).to(device)
+            genActions = True
+        hidden_all = self.feature_extractor(x / 255.0)
+        #TODO Add param for parameter sharing
+        for i in range(upper_bound):
+            # NAN ISSUE
+            hidden = hidden_all[i]
+            logits = self.actor(hidden) #probabilities
+            probs = Categorical(logits=logits) # create a distribution
+            if genActions:
+                action = probs.sample()
+                actions[i] = action
+        actions = actions.int()
+        return actions, probs.log_prob(actions), probs.entropy(), self.critic(hidden_all) #actions, logprobs, _, values 
 
 if __name__ == "__main__":
     args = parse_args()
@@ -179,30 +120,30 @@ if __name__ == "__main__":
     torch.manual_seed(args.seed)
     torch.backends.cudnn.deterministic = True
     torch.use_deterministic_algorithms(True)
-
-    if pz:
+    
+    if pz: 
         num_steps = 125
     else:
         num_steps = args.num_steps #default 1000
         # frame_size = (88, 88)
         # stack_size = 3
-
+    
     frame_size = (args.frame_size, args.frame_size)
     stack_size = args.num_stacked
 
     """ ENV SETUP """
     if pz:
-        # env = pistonball_v6.parallel_env(
-        #     render_mode="None", continuous=False, max_cycles=num_steps
-        # )
-        env = gym.make("BreakoutNoFrameskip-v4")
+        env = pistonball_v6.parallel_env(
+            render_mode="None", continuous=False, max_cycles=num_steps
+        )
     else:
         env = load_meltingpot(args.env_id)
         env = MeltingPotCompatibilityV0(env, render_mode="None")
+    
 
     env = color_reduction_v0(env, 'full') # grayscale
-    env = resize_v1(env, frame_size[0], frame_size[1]) # resize and stack images
-    env = frame_stack_v1(env, stack_size=stack_size)
+    env = resize_v1(env, frame_size[0], frame_size[1]) # resize 
+    env = frame_stack_v1(env, stack_size=stack_size) # stack
 
     if pz:
         num_agents = 1
@@ -214,8 +155,8 @@ if __name__ == "__main__":
         observation_size = env.observation_space(env.possible_agents[0]).shape
 
     """ LEARNER SETUP """
-    ppo = PPO(num_actions=num_actions).to(device)
-    optimizer = optim.Adam(ppo.parameters(), lr=args.learning_rate, eps=1e-5)
+    mappo = MAPPO(num_actions=num_actions).to(device)
+    optimizer = optim.Adam(mappo.parameters(), lr=args.learning_rate, eps=1e-5)
 
     """ ALGO LOGIC: EPISODE STORAGE"""
     end_step = 0
@@ -228,7 +169,7 @@ if __name__ == "__main__":
         rb_logprobs = torch.zeros((num_agents)).to(device)
         rb_rewards = torch.zeros((num_agents)).to(device)
         rb_terms = torch.zeros((num_agents)).to(device)
-        rb_values = torch.zeros((num_agents)).to(device)#for each agent
+        rb_values = torch.zeros((num_agents)).to(device)#for each agent 
     else:
     '''
     rb_obs = torch.zeros((num_steps, num_agents, stack_size, *frame_size)).to(device)#EPISODE
@@ -236,42 +177,37 @@ if __name__ == "__main__":
     rb_logprobs = torch.zeros((num_steps, num_agents)).to(device)
     rb_rewards = torch.zeros((num_steps, num_agents)).to(device)
     rb_terms = torch.zeros((num_steps, num_agents)).to(device)
-    rb_values = torch.zeros((num_steps, num_agents)).to(device)#for each agent
+    rb_values = torch.zeros((num_steps, num_agents)).to(device)#for each agent 
 
     """ TRAINING LOGIC """
     # train for n number of episodes
     tb = SummaryWriter(log_dir="runs/"+exp_name)
-    tb.add_text(
-        "hyperparameters",
-        "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
-    )
-
     num_updates = total_timesteps // num_steps
     step_count = 0
     for update in range(1, int(num_updates) + 1):
-        ppo.feature_extractor.eval()
-        ppo.actor.eval()
-        ppo.critic.eval()
         print("COLLECTING EXPERIENCE")
         # collect an episode
+        mappo.feature_extractor.eval()
+        mappo.actor.eval()
+        mappo.critic.eval()
         with torch.no_grad():
             # collect observations and convert to batch of torch tensors
             next_obs, info = env.reset(seed=args.seed)
             # reset the episodic return
             total_episodic_return = 0
+            
             # each episode has num_steps
             terminated = False
             for step in range(0, num_steps):
                 step_count+=1
                 # rollover the observation
-                obs = batchify_obs(next_obs, device) # for torch
+                obs = batchify_obs(next_obs, device) # for torch 
                 # get action from the agent
-                actions, logprobs, _, values = ppo.get_action_and_value(obs)
+                actions, logprobs, _, values = mappo.get_actions_and_values(obs, num_agents, device)
                 # execute the environment and log data
                 next_obs, rewards, terms, truncs, infos = env.step(
-                    unbatchify(actions, env) # for PZ
+                    unbatchify(actions, env) # info has vector reward
                 )
-
                 # add to episode storage
                 rb_obs[step] = obs #BUFFER STORES EACH TRANSITION
                 rb_rewards[step] = batchify(rewards, device) #each agent separate
@@ -285,12 +221,13 @@ if __name__ == "__main__":
 
                 # compute episodic return
                 total_episodic_return += rb_rewards[step].cpu().numpy()
-
                 # if we reach termination or truncation, end
                 if any([terms[a] for a in terms]) or any([truncs[a] for a in truncs]):
                     end_step = step
                     terminated = True
                     break
+            #if not terminated:
+            #    end_step = num_steps-1 #CHECK
 
         # GENERATE EXPERIENCE FOR REPLAY BUFFER (Actor)
 
@@ -314,26 +251,27 @@ if __name__ == "__main__":
         b_returns = torch.flatten(rb_returns[:end_step], start_dim=0, end_dim=1)
         b_values = torch.flatten(rb_values[:end_step], start_dim=0, end_dim=1)
         b_advantages = torch.flatten(rb_advantages[:end_step], start_dim=0, end_dim=1)
-        #SAMPLE FROM BUFFER AND UPDATE NETWORKS (Learner)
 
+        #SAMPLE FROM BUFFER AND UPDATE NETWORKS (Learner)        
         # Optimizing the policy and value network
         b_index = np.arange(len(b_obs))
         clip_fracs = []
 
-        ppo.feature_extractor.train()
-        ppo.actor.train()
-        ppo.critic.train()
-        print("TRAINING")
-        for repeat in range(num_epochs):#epochs
+        mappo.feature_extractor.train()
+        mappo.actor.train()
+        mappo.critic.train()
+        print("TRAINING")#ON COLLECTED EXPERIENCE
+        for repeat in range(num_epochs):#pass over batch n times
             # shuffle the indices we use to access the data
             np.random.shuffle(b_index)
             #SHUFFLE FOR TRAINING
-            for start in range(0, len(b_obs) , batch_size):#minibatch
+            #PASS THROUGH ENTIRE EPISODE IN SHUFFLED BATCHES
+            for start in range(0, len(b_obs), batch_size):#minibatch
                 # select the indices we want to train on
                 end = start + batch_size
-                batch_index = b_index[start:end]
-                _, newlogprob, entropy, value = ppo.get_action_and_value(
-                    b_obs[batch_index], b_actions.long()[batch_index]
+                batch_index = b_index[start:end]#shuffled
+                _, newlogprob, entropy, values = mappo.get_actions_and_values(
+                    b_obs[batch_index], num_agents, device, b_actions.long()[batch_index]
                 )
                 logratio = newlogprob - b_logprobs[batch_index]
                 ratio = logratio.exp() #divergence
@@ -346,11 +284,11 @@ if __name__ == "__main__":
                         ((ratio - 1.0).abs() > clip_coef).float().mean().item()
                     ]
 
-                if args.norm_adv: # normalize advantaegs
-                    advantages = b_advantages[batch_index]
-                    advantages = (advantages - advantages.mean()) / (
-                        advantages.std() + 1e-8
-                    )
+                # normalize advantaegs
+                advantages = b_advantages[batch_index]
+                advantages = (advantages - advantages.mean()) / (
+                    advantages.std() + 1e-8
+                )
 
                 # Policy loss
                 pg_loss1 = -b_advantages[batch_index] * ratio
@@ -360,10 +298,9 @@ if __name__ == "__main__":
                 pg_loss = torch.max(pg_loss1, pg_loss2).mean() #clipping
 
                 # Value loss
-                value = value.flatten()
-                v_loss_unclipped = (value - b_returns[batch_index]) ** 2
+                v_loss_unclipped = (values - b_returns[batch_index]) ** 2
                 v_clipped = b_values[batch_index] + torch.clamp(
-                    value - b_values[batch_index],
+                    values - b_values[batch_index],
                     -clip_coef,
                     clip_coef,
                 )
@@ -381,11 +318,11 @@ if __name__ == "__main__":
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
-        torch.save(ppo.feature_extractor.state_dict(), "model/feat_"+exp_name)
-        torch.save(ppo.actor.state_dict(), "model/actor_"+exp_name)
+        torch.save(mappo.feature_extractor.state_dict(), "model/feat_"+exp_name)
+        torch.save(mappo.actor.state_dict(), "model/actor_"+exp_name)
         print("save")
 
-        print(f"Episodic Return: {np.mean(total_episodic_return)}")
+        print(f"Mean Episodic Return: {np.mean(total_episodic_return)}")
         tb.add_scalar("mean_episodic_return",np.mean(total_episodic_return), step_count)
         print(f"Step Count: {step_count}")
         print(f"Episode Length: {end_step}")
@@ -408,7 +345,7 @@ if __name__ == "__main__":
     env = resize_v1(env, 64, 64)
     env = frame_stack_v1(env, stack_size=4)
 
-    ppo.actor.eval()
+    mappo.actor.eval()
 
     with torch.no_grad():
         # render 5 episodes out
@@ -418,7 +355,7 @@ if __name__ == "__main__":
             terms = [False]
             truncs = [False]
             while not any(terms) and not any(truncs):
-                actions, logprobs, _, values = ppo.get_action_and_value(obs)
+                actions, logprobs, _, values = agent.get_actions_and_values(obs, num_agents, device)
                 obs, rewards, terms, truncs, infos = env.step(unbatchify(actions, env))
                 obs = batchify_obs(obs, device)
                 terms = [terms[a] for a in terms]

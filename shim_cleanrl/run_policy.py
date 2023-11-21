@@ -1,7 +1,8 @@
 import torch
 import numpy as np
-from shim.cleanrl.mappo_shared import MAPPO, batchify_obs
-from shim.cleanrl.ppo import PPO, batchify_obs
+from mappo_shared import MAPPO
+from ppo import PPO
+from utils import batchify_obs
 from supersuit import color_reduction_v0, frame_stack_v1, resize_v1
 
 #DEBUG START
@@ -33,7 +34,8 @@ if load_model:
         # exp_name = "gpu_ctde_state_4x4__clean_up_simple__1__1695335842"
         # exp_name = "gpu_ctde_state_4x4_divergent__clean_up_simple__1__1695350009"
 
-        exp_name = "save_ppo_single_easy__clean_up_simple__1933059180__1700078728"
+        exp_name = "fixed_ppo_single_hard__clean_up_simple__86427174__1700575418"
+        # exp_name = "save_ppo_single_easy__clean_up_simple__1933059180__1700078728"
         # exp_name = "save_full_ppo_single_hard__clean_up_simple__121193687__1700102084"
         # exp_name = "noturn_gpu_ctde_state_multicoord__clean_up_simple__1__1697719103"
 

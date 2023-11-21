@@ -11,9 +11,9 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.distributions.categorical import Categorical
 from torch.utils.tensorboard import SummaryWriter
+from supersuit import color_reduction_v0, frame_stack_v1, resize_v1
 
 from utils import batchify_obs, batchify, unbatchify
-from supersuit import color_reduction_v0, frame_stack_v1, resize_v1
 from shimmy import MeltingPotCompatibilityV0
 from shimmy.utils.meltingpot import load_meltingpot
 
