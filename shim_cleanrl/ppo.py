@@ -46,6 +46,8 @@ def parse_args():
         help="the number of stacked framed")
     parser.add_argument("--frame_size", type=int, default=64,#32
         help="the frame size of observations")
+    parser.add_argument("--chekpoint_window", type=int, default=10,
+        help="checkpoint window size")
     parser.add_argument("--prosocial", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
         help="if toggled, prosocial training")
     parser.add_argument("--anneal-lr", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
@@ -106,7 +108,6 @@ class PPO(nn.Module):
         return action, probs.log_prob(action), probs.entropy(), self.critic(hidden)
     
 if __name__ == "__main__":
-    current_best = 0
     args = parse_args()
     exp_name = f"{args.exp_name}__{args.env_id}__{args.seed}__{int(time.time())}"
     writer = SummaryWriter(log_dir="runs/"+exp_name)
@@ -143,6 +144,10 @@ if __name__ == "__main__":
     optimizer = optim.Adam(ppo.parameters(), lr=args.learning_rate, eps=1e-5)
 
     total_episodic_return = 0
+    current_best = 0
+    chekpoint_window = args.chekpoint_window
+    window_episodic_return = np.zeros(chekpoint_window)
+
     # ALGO Logic: Storage setup
     obs = torch.zeros((num_steps, num_agents, stack_size, *frame_size)).to(device)#EPISODE
     actions = torch.zeros(num_steps, num_agents).to(device)
@@ -155,7 +160,7 @@ if __name__ == "__main__":
     global_step = 0
     start_time = time.time()
     num_updates = int(args.total_timesteps // num_steps)#2e6 is float
-
+    index = 0
     for update in range(1, num_updates + 1):
         print("COLLECTING EXPERIENCE")
         # Annealing the rate if instructed to do so.
@@ -279,11 +284,18 @@ if __name__ == "__main__":
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
-        if total_episodic_return > current_best:
+        if(update > chekpoint_window):
+            window_episodic_return = np.delete(window_episodic_return,0)
+            window_episodic_return = np.append(window_episodic_return, total_episodic_return)
+        else:
+            window_episodic_return[index] = total_episodic_return
+            index+=1
+
+        if np.mean(window_episodic_return) > current_best:
             torch.save(ppo.feature_extractor.state_dict(), "model/feat_"+exp_name)
             torch.save(ppo.actor.state_dict(), "model/actor_"+exp_name)
-            current_best = total_episodic_return
-            print("save")
+            current_best = np.mean(window_episodic_return)
+            print("SAVE")
 
         print(f"Episodic Return: {total_episodic_return}")
         writer.add_scalar("mean_episodic_return",total_episodic_return, global_step)
