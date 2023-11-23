@@ -6,7 +6,7 @@ from supersuit import color_reduction_v0, frame_stack_v1, resize_v1
 from torch.distributions.categorical import Categorical
 from torch.utils.tensorboard import SummaryWriter
 
-from utils import batchify_obs, batchify, unbatchify
+from utils import batchify_obs, batchify, unbatchify, layer_init
 from shimmy import MeltingPotCompatibilityV0
 from shimmy.utils.meltingpot import load_meltingpot
 
@@ -78,42 +78,37 @@ class PPO(nn.Module):
 
         # if mpot:
         #     self.network = nn.Sequential(
-        #         self._layer_init(nn.Conv2d(3, 32, 3, padding=1)),#pixel observations, out channels 32
+        #         layer_init(nn.Conv2d(3, 32, 3, padding=1)),#pixel observations, out channels 32
         #         nn.MaxPool2d(2),
         #         nn.ReLU(),
-        #         self._layer_init(nn.Conv2d(32, 64, 3, padding=1)),
+        #         layer_init(nn.Conv2d(32, 64, 3, padding=1)),
         #         nn.MaxPool2d(2),
         #         nn.ReLU(),
-        #         self._layer_init(nn.Conv2d(64, 128, 3, padding=1)),
+        #         layer_init(nn.Conv2d(64, 128, 3, padding=1)),
         #         nn.MaxPool2d(2),
         #         nn.ReLU(),
         #         nn.Flatten(),
-        #         self._layer_init(nn.Linear(128 * 11 * 11, 512)),
+        #         layer_init(nn.Linear(128 * 11 * 11, 512)),
         #         nn.ReLU(),
         #     )
         # else:
         #feature extractor
         self.feature_extractor = nn.Sequential(
-            self._layer_init(nn.Conv2d(4, 32, 3, padding=1)),#pixel observations, out channels 32
+            layer_init(nn.Conv2d(4, 32, 3, padding=1)),#pixel observations, out channels 32
             nn.MaxPool2d(2),
             nn.ReLU(),
-            self._layer_init(nn.Conv2d(32, 64, 3, padding=1)),
+            layer_init(nn.Conv2d(32, 64, 3, padding=1)),
             nn.MaxPool2d(2),
             nn.ReLU(),
-            self._layer_init(nn.Conv2d(64, 128, 3, padding=1)),
+            layer_init(nn.Conv2d(64, 128, 3, padding=1)),
             nn.MaxPool2d(2),
             nn.ReLU(),
             nn.Flatten(),
-            self._layer_init(nn.Linear(128 * 8 * 8, 512)),
+            layer_init(nn.Linear(128 * 8 * 8, 512)),
             nn.ReLU(),
         )
-        self.actor = self._layer_init(nn.Linear(512, num_actions), std=0.01)#predict actions 0,1,2 for EACH agent (policy)
-        self.critic = self._layer_init(nn.Linear(512, 1))#predict value (given state)
-
-    def _layer_init(self, layer, std=np.sqrt(2), bias_const=0.0):
-        torch.nn.init.orthogonal_(layer.weight, std)
-        torch.nn.init.constant_(layer.bias, bias_const)
-        return layer
+        self.actor = layer_init(nn.Linear(512, num_actions), std=0.01)#predict actions 0,1,2 for EACH agent (policy)
+        self.critic = layer_init(nn.Linear(512, 1))#predict value (given state)
 
     def get_value(self, x):
         return self.critic(self.feature_extractor(x / 255.0))# get value of state for each agent
