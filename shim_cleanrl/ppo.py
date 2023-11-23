@@ -13,7 +13,7 @@ from torch.distributions.categorical import Categorical
 from torch.utils.tensorboard import SummaryWriter
 from supersuit import color_reduction_v0, frame_stack_v1, resize_v1
 
-from utils import batchify_obs, batchify, unbatchify
+from utils import batchify_obs, batchify, unbatchify, layer_init
 from shimmy import MeltingPotCompatibilityV0
 from shimmy.utils.meltingpot import load_meltingpot
 
@@ -48,9 +48,7 @@ def parse_args():
         help="the frame size of observations")
     parser.add_argument("--chekpoint_window", type=int, default=10,
         help="checkpoint window size")
-    parser.add_argument("--prosocial", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
-        help="if toggled, prosocial training")
-    parser.add_argument("--anneal-lr", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
+    parser.add_argument("--anneal_lr", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
         help="Toggle learning rate annealing for policy and value networks")
     parser.add_argument("--gamma", type=float, default=0.99,
         help="the discount factor gamma")
@@ -62,18 +60,12 @@ def parse_args():
         help="the surrogate clipping coefficient")
     parser.add_argument("--clip_vloss", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
         help="Toggles whether or not to use a clipped loss for the value function, as per the paper.")
-    parser.add_argument("--max-grad-norm", type=float, default=0.5,
+    parser.add_argument("--max_grad_norm", type=float, default=0.5,
         help="the maximum norm for the gradient clipping")
-    parser.add_argument("--target-kl", type=float, default=None,
+    parser.add_argument("--target_kl", type=float, default=None,
         help="the target KL divergence threshold")
     args = parser.parse_args()
     return args
-
-def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
-    torch.nn.init.orthogonal_(layer.weight, std)
-    torch.nn.init.constant_(layer.bias, bias_const)
-    return layer
-
 
 class PPO(nn.Module):
     def __init__(self, num_actions):

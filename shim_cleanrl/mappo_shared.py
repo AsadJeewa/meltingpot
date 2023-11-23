@@ -1,3 +1,9 @@
+import argparse
+import os
+import random
+import time
+from distutils.util import strtobool
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -6,13 +12,9 @@ from supersuit import color_reduction_v0, frame_stack_v1, resize_v1
 from torch.distributions.categorical import Categorical
 from torch.utils.tensorboard import SummaryWriter
 from pettingzoo.butterfly import pistonball_v6
-import argparse
-import os
-import random
-from distutils.util import strtobool
-import time
 
-from utils import batchify_obs, batchify, unbatchify
+
+from utils import batchify_obs, batchify, unbatchify, layer_init
 from shimmy import MeltingPotCompatibilityV0 #venv
 from shimmy.utils.meltingpot import load_meltingpot
 
@@ -30,12 +32,14 @@ def parse_args():
     # Algorithm specific arguments
     parser.add_argument("--env_id", type=str, default="clean_up_simple",
         help="the id of the environment")
-    parser.add_argument("--timesteps", type=int, default=2e6,
+    parser.add_argument("--total_timesteps", type=int, default=1e7,
         help="total timesteps of the experiments")
     parser.add_argument("--batch_size", type=int, default=32,
         help="batch size")
     parser.add_argument("--learning_rate", type=float, default=0.001,
         help="the learning rate of the optimizer")
+    parser.add_argument("--norm_adv", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
+        help="Toggles advantages normalization")
     parser.add_argument("--epochs", type=int, default=3,
         help="the K epochs to update the policy")
     parser.add_argument("--num_steps", type=int, default=1000,
@@ -44,38 +48,50 @@ def parse_args():
         help="the number of stacked framed")
     parser.add_argument("--frame_size", type=int, default=64,#32
         help="the frame size of observations")
+    parser.add_argument("--chekpoint_window", type=int, default=10,
+        help="checkpoint window size")
+    parser.add_argument("--anneal_lr", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
+        help="Toggle learning rate annealing for policy and value networks")
+    parser.add_argument("--gamma", type=float, default=0.99,
+        help="the discount factor gamma")
+    parser.add_argument("--ent_coef", type=float, default=0.1,
+        help="coefficient of the entropy")
+    parser.add_argument("--vf_coef", type=float, default=0.1,
+        help="coefficient of the value function")
+    parser.add_argument("--clip_coef", type=float, default=0.1,
+        help="the surrogate clipping coefficient")
     parser.add_argument("--pz", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
         help="if toggled, pz environment is used instead of mpot")
     parser.add_argument("--prosocial", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
         help="if toggled, prosocial training")
-    
+    parser.add_argument("--clip_vloss", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
+        help="Toggles whether or not to use a clipped loss for the value function, as per the paper.")
+    parser.add_argument("--max_grad_norm", type=float, default=0.5,
+        help="the maximum norm for the gradient clipping")
+    parser.add_argument("--target_kl", type=float, default=None,
+        help="the target KL divergence threshold")
     args = parser.parse_args()
     return args
-
+    
 class MAPPO(nn.Module):
     def __init__(self, num_actions):
         super().__init__()
         self.feature_extractor = nn.Sequential(
-            self._layer_init(nn.Conv2d(4, 32, 3, padding=1)),#pixel observations, out channels 32
+            layer_init(nn.Conv2d(4, 32, 3, padding=1)),#pixel observations, out channels 32
             nn.MaxPool2d(2),
             nn.ReLU(),
-            self._layer_init(nn.Conv2d(32, 64, 3, padding=1)),
+            layer_init(nn.Conv2d(32, 64, 3, padding=1)),
             nn.MaxPool2d(2),
             nn.ReLU(),
-            self._layer_init(nn.Conv2d(64, 128, 3, padding=1)),
+            layer_init(nn.Conv2d(64, 128, 3, padding=1)),
             nn.MaxPool2d(2),
             nn.ReLU(),
             nn.Flatten(),
-            self._layer_init(nn.Linear(128 * 8 * 8, 512)),
+            layer_init(nn.Linear(128 * 8 * 8, 512)),
             nn.ReLU(),
         )
-        self.actor = self._layer_init(nn.Linear(512, num_actions), std=0.01)#predict actions 0,1,2 for one agent (policy)
-        self.critic = self._layer_init(nn.Linear(512, 1))#predict value (given state)
-
-    def _layer_init(self, layer, std=np.sqrt(2), bias_const=0.0):
-        torch.nn.init.orthogonal_(layer.weight, std)
-        torch.nn.init.constant_(layer.bias, bias_const)
-        return layer
+        self.actor = layer_init(nn.Linear(512, num_actions), std=0.01)#predict actions 0,1,2 for one agent (policy)
+        self.critic = layer_init(nn.Linear(512, 1))#predict value (given state)
 
     def get_values(self, x):
         return self.critic(self.feature_extractor(x / 255.0))# get value of state for each agent
@@ -87,11 +103,11 @@ class MAPPO(nn.Module):
         if actions is None:
             actions = torch.zeros(num_agents).to(device)
             genActions = True
-        hidden_all = self.feature_extractor(x / 255.0)
+        hidden_all = self.feature_extractor(x / 255.0)#CHECK EACH SEPERATELY
         #TODO Add param for parameter sharing
         for i in range(upper_bound):
             # NAN ISSUE
-            hidden = hidden_all[i]
+            hidden = hidden_all[i]#TODO CHECK
             logits = self.actor(hidden) #probabilities
             probs = Categorical(logits=logits) # create a distribution
             if genActions:
@@ -106,13 +122,6 @@ if __name__ == "__main__":
     exp_name = f"{args.exp_name}__{args.env_id}__{args.seed}__{int(time.time())}"
     """ALGO PARAMS"""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    ent_coef = 0.1
-    vf_coef = 0.1
-    clip_coef = 0.1
-    gamma = 0.99
-    batch_size = args.batch_size
-    total_timesteps = args.timesteps
-    num_epochs = args.epochs
 
     # TRY NOT TO MODIFY: seeding
     random.seed(args.seed)
@@ -161,6 +170,9 @@ if __name__ == "__main__":
     """ ALGO LOGIC: EPISODE STORAGE"""
     end_step = 0
     total_episodic_return = 0
+    current_best = 0
+    chekpoint_window = args.chekpoint_window
+    window_episodic_return = np.zeros(chekpoint_window)
     # replay buffer
     '''
     if mpot:
@@ -181,15 +193,17 @@ if __name__ == "__main__":
 
     """ TRAINING LOGIC """
     # train for n number of episodes
-    tb = SummaryWriter(log_dir="runs/"+exp_name)
-    num_updates = total_timesteps // num_steps
+    writer = SummaryWriter(log_dir="runs/"+exp_name)
+    num_updates = args.total_timesteps // num_steps
     step_count = 0
+    index = 0
     for update in range(1, int(num_updates) + 1):
         print("COLLECTING EXPERIENCE")
+        if args.anneal_lr:
+            frac = 1.0 - (update - 1.0) / num_updates
+            lrnow = frac * args.learning_rate
+            optimizer.param_groups[0]["lr"] = lrnow
         # collect an episode
-        mappo.feature_extractor.eval()
-        mappo.actor.eval()
-        mappo.critic.eval()
         with torch.no_grad():
             # collect observations and convert to batch of torch tensors
             next_obs, info = env.reset(seed=args.seed)
@@ -199,6 +213,9 @@ if __name__ == "__main__":
             # each episode has num_steps
             terminated = False
             for step in range(0, num_steps):
+                mappo.feature_extractor.eval()
+                mappo.actor.eval()
+                mappo.critic.eval()
                 step_count+=1
                 # rollover the observation
                 obs = batchify_obs(next_obs, device) # for torch 
@@ -238,10 +255,10 @@ if __name__ == "__main__":
                 #GAE empirical returns minus the value function baseline
                 delta = (
                     rb_rewards[t]
-                    + gamma * rb_values[t + 1] * rb_terms[t + 1]
+                    + args.gamma * rb_values[t + 1] * rb_terms[t + 1]
                     - rb_values[t]
                 )
-                rb_advantages[t] = delta + gamma * gamma * rb_advantages[t + 1]
+                rb_advantages[t] = delta + args.gamma * args.gamma * rb_advantages[t + 1]
             rb_returns = rb_advantages + rb_values
 
         # convert our episodes to batch of individual transitions
@@ -261,14 +278,14 @@ if __name__ == "__main__":
         mappo.actor.train()
         mappo.critic.train()
         print("TRAINING")#ON COLLECTED EXPERIENCE
-        for repeat in range(num_epochs):#pass over batch n times
+        for repeat in range(args.epochs):#pass over batch n times
             # shuffle the indices we use to access the data
             np.random.shuffle(b_index)
             #SHUFFLE FOR TRAINING
             #PASS THROUGH ENTIRE EPISODE IN SHUFFLED BATCHES
-            for start in range(0, len(b_obs), batch_size):#minibatch
+            for start in range(0, len(b_obs), args.batch_size):#minibatch
                 # select the indices we want to train on
-                end = start + batch_size
+                end = start + args.batch_size
                 batch_index = b_index[start:end]#shuffled
                 _, newlogprob, entropy, values = mappo.get_actions_and_values(
                     b_obs[batch_index], num_agents, device, b_actions.long()[batch_index]
@@ -281,63 +298,81 @@ if __name__ == "__main__":
                     old_approx_kl = (-logratio).mean()
                     approx_kl = ((ratio - 1) - logratio).mean()
                     clip_fracs += [
-                        ((ratio - 1.0).abs() > clip_coef).float().mean().item()
+                        ((ratio - 1.0).abs() > args.clip_coef).float().mean().item()
                     ]
 
                 # normalize advantaegs
                 advantages = b_advantages[batch_index]
-                advantages = (advantages - advantages.mean()) / (
-                    advantages.std() + 1e-8
-                )
+                if args.norm_adv:
+                    advantages = (advantages - advantages.mean()) / (
+                        advantages.std() + 1e-8
+                    )
 
                 # Policy loss
                 pg_loss1 = -b_advantages[batch_index] * ratio
                 pg_loss2 = -b_advantages[batch_index] * torch.clamp(
-                    ratio, 1 - clip_coef, 1 + clip_coef
+                    ratio, 1 - args.clip_coef, 1 + args.clip_coef
                 )
                 pg_loss = torch.max(pg_loss1, pg_loss2).mean() #clipping
 
                 # Value loss
-                v_loss_unclipped = (values - b_returns[batch_index]) ** 2
-                v_clipped = b_values[batch_index] + torch.clamp(
-                    values - b_values[batch_index],
-                    -clip_coef,
-                    clip_coef,
-                )
-                v_loss_clipped = (v_clipped - b_returns[batch_index]) ** 2
-                v_loss_max = torch.max(v_loss_unclipped, v_loss_clipped)
-                v_loss = 0.5 * v_loss_max.mean()
+                if args.clip_vloss:
+                    v_loss_unclipped = (values - b_returns[batch_index]) ** 2
+                    v_clipped = b_values[batch_index] + torch.clamp(
+                        values - b_values[batch_index],
+                        -args.clip_coef,
+                        args.clip_coef,
+                    )
+                    v_loss_clipped = (v_clipped - b_returns[batch_index]) ** 2
+                    v_loss_max = torch.max(v_loss_unclipped, v_loss_clipped)
+                    v_loss = 0.5 * v_loss_max.mean()
+                else:
+                    v_loss = 0.5 * ((values - b_returns[batch_index]) ** 2).mean()
                 entropy_loss = entropy.mean()
-                loss = pg_loss - ent_coef * entropy_loss + v_loss * vf_coef
+                loss = pg_loss - args.ent_coef * entropy_loss + v_loss * args.vf_coef
 
                 optimizer.zero_grad()
                 loss.backward()
+                nn.utils.clip_grad_norm_(mappo.parameters(), args.max_grad_norm)
                 optimizer.step()
+            
+            if args.target_kl is not None:
+                if approx_kl > args.target_kl:
+                    break
 
         y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
-        torch.save(mappo.feature_extractor.state_dict(), "model/feat_"+exp_name)
-        torch.save(mappo.actor.state_dict(), "model/actor_"+exp_name)
-        print("save")
+        if(update > chekpoint_window):
+            window_episodic_return = np.delete(window_episodic_return,0)
+            window_episodic_return = np.append(window_episodic_return, total_episodic_return)
+        else:
+            window_episodic_return[index] = np.mean(total_episodic_return)
+            index+=1
+        
+        if np.mean(window_episodic_return) > current_best:
+            torch.save(mappo.feature_extractor.state_dict(), "model/feat_"+exp_name)
+            torch.save(mappo.actor.state_dict(), "model/actor_"+exp_name)
+            current_best = np.mean(window_episodic_return)
+            print("SAVE")
 
         print(f"Mean Episodic Return: {np.mean(total_episodic_return)}")
-        tb.add_scalar("mean_episodic_return",np.mean(total_episodic_return), step_count)
+        writer.add_scalar("mean_episodic_return",np.mean(total_episodic_return), step_count)
         print(f"Step Count: {step_count}")
         print(f"Episode Length: {end_step}")
         print("")
         print(f"Value Loss: {v_loss.item()}")
-        tb.add_scalar("v_loss", v_loss.item(), step_count)
+        writer.add_scalar("v_loss", v_loss.item(), step_count)
         print(f"Policy Loss: {pg_loss.item()}")
-        tb.add_scalar("pg_loss", pg_loss.item(), step_count)
+        writer.add_scalar("pg_loss", pg_loss.item(), step_count)
         print(f"Old Approx KL: {old_approx_kl.item()}")
         print(f"Approx KL: {approx_kl.item()}")
         print(f"Clip Fraction: {np.mean(clip_fracs)}")
         print(f"Explained Variance: {explained_var.item()}")
         print("\n-------------------------------------------\n")
 
-    tb.close()
+    writer.close()
 '''
     """ RENDER THE POLICY """
     env = pistonball_v6.parallel_env(render_mode="human", continuous=False)
