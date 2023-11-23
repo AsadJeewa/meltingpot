@@ -126,7 +126,7 @@ PP
 BB
 """
     num_agents = 2
-    num_steps = 1000
+    num_steps = 100
     maxAppleGrowthRate=1.0/1.0
     thresholdDepletion=0.75
     thresholdRestoration=0.5
