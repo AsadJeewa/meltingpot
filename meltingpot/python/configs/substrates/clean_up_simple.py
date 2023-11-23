@@ -55,20 +55,21 @@ PrefabConfig = game_object_utils.PrefabConfig
 _ENABLE_DEBUG_OBSERVATIONS = False
 
 class Mode(Enum):
-    SINGLE_0 = 1
-    SINGLE_1 = 2
-    SINGLE_2 = 3
-    MULTI_0 = 4
-    MULTI_1 = 5
+    SINGLE_SEQ = 1
+    SINGLE_SMALL = 2
+    SINGLE_LARGE = 3
+    MULTI_ALONE_SEQ = 4
+    MULTI_ALONE_SMALL = 5
+    MULTI_COOP_SMALL = 6
 
 #BEGIN DEBUG
 
 divergent = False
-mode = Mode.SINGLE_2
+mode = Mode.MULTI_ALONE_SEQ
 
 #END DEBUG
 
-if mode == Mode.SINGLE_0:
+if mode == Mode.SINGLE_SEQ:
     ASCII_MAP = """
 F
 P
@@ -76,15 +77,15 @@ B
 """
     num_agents = 1
     num_steps = 100
-    maxAppleGrowthRate=1.0
+    maxAppleGrowthRate=1.0/1.0
     thresholdDepletion=0.75
     thresholdRestoration=0.5
     dirtSpawnProbability=1.0
-# 1x3
+# 3x1
 # x sprite size = 8
 # 8x24 -> 64x64
 
-elif mode == Mode.SINGLE_1:
+elif mode == Mode.SINGLE_SMALL:
     ASCII_MAP = """
 FFFF
 P   
@@ -93,13 +94,13 @@ BBBB
 """
     num_agents = 1   
     num_steps = 1000 
-    maxAppleGrowthRate=0.25
+    maxAppleGrowthRate=1.0/4.0
     thresholdDepletion=1.0
     thresholdRestoration=0.75
     dirtSpawnProbability=1.0
 # 4x4
 
-elif mode == Mode.SINGLE_2:
+elif mode == Mode.SINGLE_LARGE:
     ASCII_MAP = """
 FFFFFFFF
 P       
@@ -112,13 +113,13 @@ BBBBBBBB
 """
     num_agents = 1   
     num_steps = 1000 
-    maxAppleGrowthRate=0.125
+    maxAppleGrowthRate=1.0/8.0
     thresholdDepletion=1.0
     thresholdRestoration=0.0
     dirtSpawnProbability=0.25
 # 8x8
 
-elif mode == Mode.MULTI_0:
+elif mode == Mode.MULTI_ALONE_SEQ:
     ASCII_MAP = """
 FF
 PP
@@ -126,7 +127,7 @@ BB
 """
     num_agents = 2
     num_steps = 1000
-    maxAppleGrowthRate=1.0
+    maxAppleGrowthRate=1.0/1.0
     thresholdDepletion=0.75
     thresholdRestoration=0.5
     dirtSpawnProbability=1.0
@@ -134,7 +135,7 @@ BB
 # x sprite size = 8
 # 16x24 -> 64x64
 
-elif mode == Mode.MULTI_1:
+elif mode == Mode.MULTI_ALONE_SMALL:
     ASCII_MAP = """
 FFFF
 P   
@@ -143,9 +144,27 @@ BBBB
 """
     num_agents = 2
     num_steps = 1000
-    maxAppleGrowthRate=1.0
+    maxAppleGrowthRate=1.0/4.0
+    thresholdDepletion=1.0
+    thresholdRestoration=0.75
+    dirtSpawnProbability=1.0
+# 4x4
+# x sprite size = 8
+# 32x32 -> 64x64
+
+elif mode == Mode.MULTI_COOP_SMALL:
+    ASCII_MAP = """
+FFFF
+P   
+   P
+BBBB
+"""
+    num_agents = 2
+    num_steps = 1000
+    maxAppleGrowthRate=1.0/4.0
     thresholdDepletion=0.75
     thresholdRestoration=0.5
+    dirtSpawnProbability=0.25
 # 4x4
 # x sprite size = 8
 # 32x32 -> 64x64
