@@ -61,11 +61,12 @@ class Mode(Enum):
     MULTI_ALONE_SEQ = 4
     MULTI_ALONE_SMALL = 5
     MULTI_COOP_SMALL = 6
+    MULTI_COOP_LARGE = 7
 
 #BEGIN DEBUG
 
 divergent = False
-mode = Mode.MULTI_ALONE_SEQ
+mode = Mode.MULTI_COOP_LARGE
 
 #END DEBUG
 
@@ -82,8 +83,6 @@ B
     thresholdRestoration=0.5
     dirtSpawnProbability=1.0
 # 3x1
-# x sprite size = 8
-# 8x24 -> 64x64
 
 elif mode == Mode.SINGLE_SMALL:
     ASCII_MAP = """
@@ -132,9 +131,6 @@ BB
     thresholdRestoration=0.5
     dirtSpawnProbability=1.0
 # 3x2
-# x sprite size = 8
-# 16x24 -> 64x64
-
 elif mode == Mode.MULTI_ALONE_SMALL:
     ASCII_MAP = """
 FFFF
@@ -149,8 +145,6 @@ BBBB
     thresholdRestoration=0.75
     dirtSpawnProbability=1.0
 # 4x4
-# x sprite size = 8
-# 32x32 -> 64x64
 
 elif mode == Mode.MULTI_COOP_SMALL:
     ASCII_MAP = """
@@ -166,6 +160,26 @@ BBBB
     thresholdRestoration=0.5
     dirtSpawnProbability=0.25
 # 4x4
+
+elif mode == Mode.MULTI_COOP_LARGE:
+    ASCII_MAP = """
+FFFFFFFF
+P       
+        
+        
+        
+        
+       P
+BBBBBBBB
+"""
+    num_agents = 2
+    num_steps = 1000
+    maxAppleGrowthRate=1.0/8.0
+    thresholdDepletion=0.75
+    thresholdRestoration=0.5
+    dirtSpawnProbability=0.25
+# 8x8
+
 # x sprite size = 8
 # 32x32 -> 64x64
 
