@@ -66,7 +66,7 @@ class Mode(Enum):
 #BEGIN DEBUG
 
 divergent = False
-mode = Mode.MULTI_COOP_LARGE
+mode = Mode.SINGLE_SMALL
 
 #END DEBUG
 
@@ -77,7 +77,7 @@ P
 B
 """
     num_agents = 1
-    num_steps = 100
+    num_steps = 100 #MATCH TO MODEL NUM STEPS
     maxAppleGrowthRate=1.0/1.0
     thresholdDepletion=0.75
     thresholdRestoration=0.5
@@ -512,8 +512,6 @@ POTENTIAL_APPLE = {
             "kwargs": {
                 "liveState": "apple",
                 "waitState": "appleWait",
-                # "rewardForEating": reward,
-                "rewardForEating": 1.0,
             }
         },
         {
@@ -863,6 +861,7 @@ def create_avatar_object(player_idx: int,
               "component": "Taste",
               "kwargs": {
                   "role": "free",
+                  "rewardForEating": 1.0,
               }
           },
           {

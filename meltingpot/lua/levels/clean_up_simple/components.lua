@@ -366,13 +366,13 @@ function Edible:__init__(kwargs)
       {'liveState', args.stringType},
       {'waitState', args.stringType},
       --{'rewardForEating', args.tableType},
-      {'rewardForEating', args.numberType},
+      --{'rewardForEating', args.numberType},
   })
   Edible.Base.__init__(self, kwargs)
 
   self._config.liveState = kwargs.liveState
   self._config.waitState = kwargs.waitState
-  self._config.rewardForEating = kwargs.rewardForEating
+  --self._config.rewardForEating = kwargs.rewardForEating
 end
 
 function Edible:reset()
@@ -403,14 +403,7 @@ function Edible:onEnter(enteringGameObject, contactName)
       local avatarComponent = enteringGameObject:getComponent('Avatar')
       -- Trigger role-specific logic if applicable.
       if enteringGameObject:hasComponent('Taste') then
-        enteringGameObject:getComponent('Taste'):consumed(
-          self._config.rewardForEating)
-      else
-        avatarComponent:addReward(self._config.rewardForEating)
-        print("EAT!!!!!!")
-        local playerIndex = avatarComponent:getIndex()
-        local vector_reward = enteringGameObject:getComponent('AllNonselfCumulants'):getPlayerVectorRewards(playerIndex)
-        vector_reward(1):fill(self._config.rewardForEating)
+        enteringGameObject:getComponent('Taste'):consumed()
       end
       events:add('edible_consumed', 'dict',
                  'player_index', avatarComponent:getIndex())  -- int
@@ -429,10 +422,12 @@ function Taste:__init__(kwargs)
   kwargs = args.parse(kwargs, {
       {'name', args.default('Taste')},
       {'role', args.default('free'), args.oneOf('free', 'cleaner', 'consumer')},
+      {'rewardForEating', args.default(1), args.numberType},
 
   })
   Taste.Base.__init__(self, kwargs)
   self._config.role = kwargs.role
+  self._config.rewardForEating = kwargs.rewardForEating
 end
 
 function Taste:registerUpdaters(updaterRegistry)
@@ -451,25 +446,25 @@ function Taste:cleaned()
   local vector_reward = self.gameObject:getComponent('AllNonselfCumulants'):getPlayerVectorRewards(playerIndex)
   if self._config.role == 'cleaner' then
     self.gameObject:getComponent('Avatar'):addReward(rewardAmount) --not used as free role
-    vector_reward(2):fill(rewardAmount)
+    vector_reward(2):fill(1) --TO FIX
   elseif self._config.role == 'consumer' then
     self.gameObject:getComponent('Avatar'):addReward(0.0)
   else
     self.gameObject:getComponent('Avatar'):addReward(rewardAmount)
-    vector_reward(2):fill(rewardAmount)
+    vector_reward(2):fill(1) --TO FIX
   end
 end
 
-function Taste:consumed(edibleDefaultReward)
+function Taste:consumed()
   local playerIndex = self.gameObject:getComponent('Avatar'):getIndex()
   local vector_reward = self.gameObject:getComponent('AllNonselfCumulants'):getPlayerVectorRewards(playerIndex)
-  local rewardAmount = self.gameObject:getComponent('Cleaner'):getRewardForCleaning()
+  local rewardAmount = self._config.rewardForEating
   if self._config.role == 'cleaner' then
     self.gameObject:getComponent('Avatar'):addReward(0.0)
   elseif self._config.role == 'consumer' then
     vector_reward(1):fill(rewardAmount)
   else
-    self.gameObject:getComponent('Avatar'):addReward(edibleDefaultReward)
+    self.gameObject:getComponent('Avatar'):addReward(rewardAmount)
     vector_reward(1):fill(rewardAmount)
   end
   self:setCumulant()
