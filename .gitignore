@@ -17,3 +17,4 @@
 #Ignore tensorboard logs
 /runs
 events.*
+*.png
