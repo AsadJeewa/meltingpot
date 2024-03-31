@@ -4,6 +4,8 @@ from mappo_shared import MAPPO
 from ppo import PPO
 from utils import batchify_obs
 from supersuit import color_reduction_v0, frame_stack_v1, resize_v1
+from matplotlib import pyplot as plt
+import seaborn as sb
 
 #DEBUG START
 load_model = True
@@ -14,7 +16,30 @@ pomdp = True
 
 frame_size = (64, 64)
 stack_size = 4
+
+plot_actions = True
 #DEBUG END
+
+def plot(actionTrack):
+    sb.set_theme()
+    plt.plot(actionTrack)
+    plt.savefig("actionTrack.png")
+    exp_name = "ppo"
+    y_ticks = [-1, 0, 1]
+    y_labels = ['clean', 'move', 'eat']
+    fig, ax = plt.subplots(1,1)
+    ax.yaxis.set_ticks(y_ticks)
+    ax.yaxis.set_ticklabels(y_labels)
+    plt.xlabel("Timestep")
+    plt.ylabel("Action")
+    plt.title(exp_name)
+    plt.plot(actionTrack,linewidth=1)
+    # plt.scatter(range(len(actionTrack)),actionTrack,s=0.5)
+    import os
+    print(os.getcwd())
+    print(exp_name)
+    plt.savefig(os.path.join(os.getcwd(),"fig/"+exp_name+"_actionTrack.png"))
+    # plt.show()
 
 if pz:
     from pettingzoo.butterfly import pistonball_v6
@@ -36,6 +61,8 @@ r = []
 numCleanAttempts = 0
 numCleanSuccesses = 0
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+actionTrack = []
+cleanOrEat = False
 
 if load_model:
         # exp_name = "gpu_ctde_state_4x4__clean_up_simple__1__1695335842"
@@ -43,7 +70,8 @@ if load_model:
 
         # exp_name = "mappo_shared__pistonball__1475661751__1702916831"
 
-        exp_name = "ppo__clean_up_simple__1743393291__1702852185"
+        exp_name = "ppo_single_small__clean_up_simple__489263223__1711101428"
+        # exp_name = "ppo__clean_up_simple__1743393291__1702852185"
         # exp_name = "fixed_ppo_single_hard__clean_up_simple__86427174__1700575418"
         # exp_name = "fixed_ppo_single_easy_cpu__clean_up_simple__726506732__1700571979"
         # exp_name = "ppo_single_2__clean_up_simple__582671304__1700611799"
@@ -51,7 +79,7 @@ if load_model:
         # exp_name = "save_full_ppo_single_hard__clean_up_simple__121193687__1700102084"
         # exp_name = "noturn_gpu_ctde_state_multicoord__clean_up_simple__1__1697719103"
 
-        modeldir = "model/TO PRESENT/"
+        modeldir = "model/LATEST/"
         num_actions = env.action_space(env.possible_agents[0]).n
         if ma:
             ppo = MAPPO(num_actions)
@@ -82,17 +110,30 @@ while env.agents:
     observations, rewards, terminations, truncations, infos = env.step(actions)
     if(actions["player_0"]==5):
         numCleanAttempts+=1
+        print("ATTEMPT CLEAN")
     if(infos["player_0"][1]==1):    
         numCleanSuccesses+=1
+        print("SUCCESS CLEAN")
+        print("VECTOR REWARD: ",infos)
+        actionTrack.append(-1)
+        cleanOrEat = True
     i = 0
     for agent in env.agents:
         if (i>len(r)-1):
             r.append(rewards[agent])
         else:
              r[i]+= rewards[agent]
+        if(rewards[agent]>0):
+            cleanOrEat = True
+            actionTrack.append(1)
+            print("EAT")
+            print("VECTOR REWARD: ",infos)
         i+=1
     steps+=1
     print("Step: ",steps," | Cumulative Rewards: ",r)    
+    if(not cleanOrEat):
+        actionTrack.append(0)
+    cleanOrEat = False
     if True in terminations:
         print("DONE")
         break
@@ -106,4 +147,7 @@ print("Clean Attempts: ",numCleanAttempts, "Clean Successes: ", numCleanSuccesse
 print("Mean Episodic Returns: ",np.mean(r))
 print("Apple Ratio: ", appleRatio)
 print("Clean Ratio: ", cleanRatio)
+
+if plot_actions:
+    plot(actionTrack)
 env.close()
