@@ -55,22 +55,23 @@ PrefabConfig = game_object_utils.PrefabConfig
 _ENABLE_DEBUG_OBSERVATIONS = False
 
 class Mode(Enum):
-    SINGLE_SEQ = 1
-    SINGLE_SMALL = 2
-    SINGLE_LARGE = 3
-    MULTI_ALONE_SEQ = 4
-    MULTI_ALONE_SMALL = 5
-    MULTI_COOP_SMALL = 6
-    MULTI_COOP_LARGE = 7
+    SINGLE_3x1 = 1
+    SINGLE_4x4 = 2
+    SINGLE_8x8 = 3
+    SINGLE_16x16 = 4
+    MULTI_ALONE_3x2 = 5
+    MULTI_ALONE_4x4 = 6
+    MULTI_COOP_4x4 = 7
+    MULTI_COOP_8x8 = 8
 
 #BEGIN DEBUG
 
 divergent = False
-mode = Mode.SINGLE_SMALL
+mode = Mode.SINGLE_3x1
 
 #END DEBUG
 
-if mode == Mode.SINGLE_SEQ:
+if mode == Mode.SINGLE_3x1:
     ASCII_MAP = """
 F
 P
@@ -84,7 +85,7 @@ B
     dirtSpawnProbability=1.0
 # 3x1
 
-elif mode == Mode.SINGLE_SMALL:
+elif mode == Mode.SINGLE_4x4:
     ASCII_MAP = """
 FFFF
 P   
@@ -99,7 +100,7 @@ BBBB
     dirtSpawnProbability=1.0
 # 4x4
 
-elif mode == Mode.SINGLE_LARGE:
+elif mode == Mode.SINGLE_8x8:
     ASCII_MAP = """
 FFFFFFFF
 P       
@@ -118,7 +119,34 @@ BBBBBBBB
     dirtSpawnProbability=0.25
 # 8x8
 
-elif mode == Mode.MULTI_ALONE_SEQ:
+elif mode == Mode.SINGLE_16x16:
+    ASCII_MAP = """
+FFFFFFFFFFFFFFFF
+P               
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+               P
+BBBBBBBBBBBBBBBB
+"""
+    num_agents = 1   
+    num_steps = 1000 
+    maxAppleGrowthRate=1.0/16.0
+    thresholdDepletion=1.0
+    thresholdRestoration=0.0
+    dirtSpawnProbability=0.25
+# 16x16
+    
+elif mode == Mode.MULTI_ALONE_3x2:
     ASCII_MAP = """
 FF
 PP
@@ -131,7 +159,7 @@ BB
     thresholdRestoration=0.5
     dirtSpawnProbability=1.0
 # 3x2
-elif mode == Mode.MULTI_ALONE_SMALL:
+elif mode == Mode.MULTI_ALONE_4x4:
     ASCII_MAP = """
 FFFF
 P   
@@ -146,7 +174,7 @@ BBBB
     dirtSpawnProbability=1.0
 # 4x4
 
-elif mode == Mode.MULTI_COOP_SMALL:
+elif mode == Mode.MULTI_COOP_4x4:
     ASCII_MAP = """
 FFFF
 P   
@@ -161,7 +189,7 @@ BBBB
     dirtSpawnProbability=0.25
 # 4x4
 
-elif mode == Mode.MULTI_COOP_LARGE:
+elif mode == Mode.MULTI_COOP_8x8:
     ASCII_MAP = """
 FFFFFFFF
 P       
@@ -854,7 +882,7 @@ def create_avatar_object(player_idx: int,
                   "cooldownTime": 2,
                   "beamLength": 1,
                   "beamRadius": 0,
-                  "rewardForCleaning": 1.0 if divergent else 0.0,
+                  "rewardForCleaning": 1.0 if divergent else 0.0, #TO FIX
               }
           },
           {
