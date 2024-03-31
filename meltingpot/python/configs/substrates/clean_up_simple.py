@@ -11,32 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Configuration for Clean Up.
-
-Example video: https://youtu.be/TqiJYxOwdxw
-
-Clean Up is a seven player game. Players are rewarded for collecting apples. In
-Clean Up, apples grow in an orchard at a rate inversely related to the
-cleanliness of a nearby river. The river accumulates pollution at a constant
-rate. The apple growth rate in the orchard drops to zero once the pollution
-accumulates past a threshold value. Players have an additional action allowing
-them to clean a small amount of pollution from the river in front of themselves.
-They must physically leave the apple orchard to clean the river. Thus, players
-must maintain a public good of high orchard regrowth rate through effortful
-contributions. This is a public good provision problem because the benefit of a
-healthy orchard is shared by all, but the costs incurred to ensure it exists are
-born by individuals.
-
-Players are also able to zap others with a beam that removes any player hit by
-it from the game for 50 steps.
-
-Clean Up was first described in Hughes et al. (2018).
-
-Hughes, E., Leibo, J.Z., Phillips, M., Tuyls, K., Duenez-Guzman, E.,
-Castaneda, A.G., Dunning, I., Zhu, T., McKee, K., Koster, R. and Roff, H., 2018,
-Inequity aversion improves cooperation in intertemporal social dilemmas. In
-Proceedings of the 32nd International Conference on Neural Information
-Processing Systems (pp. 3330-3340).
+"""
+Configuration for Clean Up Simple
 """
 
 from typing import Any, Dict, Mapping, Sequence
@@ -66,7 +42,7 @@ class Mode(Enum):
 
 #BEGIN DEBUG
 
-divergent = False
+divergent = True
 mode = Mode.SINGLE_3x1
 
 #END DEBUG
