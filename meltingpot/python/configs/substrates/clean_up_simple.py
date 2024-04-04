@@ -42,8 +42,9 @@ class Mode(Enum):
 
 #BEGIN DEBUG
 
-divergent = False
-divergent_reward = 1.0
+divergent = True
+divergent_eating_reward = 2.0
+divergent_cleaning_reward = 1.0
 mode = Mode.SINGLE_4x4
 print("*************",mode)
 #END DEBUG
@@ -859,14 +860,14 @@ def create_avatar_object(player_idx: int,
                   "cooldownTime": 2,
                   "beamLength": 1,
                   "beamRadius": 0,
-                  "rewardForCleaning": divergent_reward if divergent else 0.0, #TO FIX
+                  "rewardForCleaning": divergent_cleaning_reward if divergent else 0.0, #TO FIX
               }
           },
           {
               "component": "Taste",
               "kwargs": {
                   "role": "free",
-                  "rewardForEating": 1.0,
+                  "rewardForEating": divergent_eating_reward if divergent else 1.0,
               }
           },
           {
