@@ -43,6 +43,7 @@ class Mode(Enum):
 #BEGIN DEBUG
 
 divergent = False
+divergent_reward = 1.0
 mode = Mode.SINGLE_4x4
 print("*************",mode)
 #END DEBUG
@@ -858,7 +859,7 @@ def create_avatar_object(player_idx: int,
                   "cooldownTime": 2,
                   "beamLength": 1,
                   "beamRadius": 0,
-                  "rewardForCleaning": 1.0 if divergent else 0.0, #TO FIX
+                  "rewardForCleaning": divergent_reward if divergent else 0.0, #TO FIX
               }
           },
           {
