@@ -42,9 +42,9 @@ class Mode(Enum):
 
 #BEGIN DEBUG
 
-divergent = True
-mode = Mode.SINGLE_3x1
-
+divergent = False
+mode = Mode.SINGLE_4x4
+print("*************",mode)
 #END DEBUG
 
 if mode == Mode.SINGLE_3x1:
@@ -69,7 +69,7 @@ P
 BBBB
 """
     num_agents = 1   
-    num_steps = 1000 
+    num_steps = 1000
     maxAppleGrowthRate=1.0/4.0
     thresholdDepletion=1.0
     thresholdRestoration=0.75
