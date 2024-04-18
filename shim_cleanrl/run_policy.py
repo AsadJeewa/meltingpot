@@ -6,13 +6,15 @@ from utils import batchify_obs
 from supersuit import color_reduction_v0, frame_stack_v1, resize_v1
 from matplotlib import pyplot as plt
 import seaborn as sb
+import os
+import csv
 
 #DEBUG START
 load_model = True
 
 ma = False
 pz  = False
-pomdp = True
+pomdp = False
 
 frame_size = (64, 64)
 stack_size = 4
@@ -22,23 +24,26 @@ plot_actions = True
 
 def plot(actionTrack):
     sb.set_theme()
-    plt.plot(actionTrack)
-    plt.savefig("actionTrack.png")
-    exp_name = "ppo"
+    # exp_name = "ppo"
     y_ticks = [-1, 0, 1]
+    # y_ticks = [0, 1, 2]
     y_labels = ['clean', 'move', 'eat']
+    # y_ticks = [-1, 0]
+    # y_labels = ['clean', 'move']
     fig, ax = plt.subplots(1,1)
-    ax.yaxis.set_ticks(y_ticks)
-    ax.yaxis.set_ticklabels(y_labels)
+    plt.figure().set_figwidth(15)
+    plt.yticks(y_ticks, y_labels)
+    # ax.set_yticklabels(y_labels)
+    plt.ylim([-1,1])
     plt.xlabel("Timestep")
     plt.ylabel("Action")
     plt.title(exp_name)
+    # actionTrack = [0, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, -1, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, -1, 0, 0, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0]
     plt.plot(actionTrack,linewidth=1)
     # plt.scatter(range(len(actionTrack)),actionTrack,s=0.5)
-    import os
-    print(os.getcwd())
-    print(exp_name)
     plt.savefig(os.path.join(os.getcwd(),"fig/"+exp_name+"_actionTrack.png"))
+    print("SAVED AT: ",os.path.join(os.getcwd(),"fig/"+exp_name+"_actionTrack.png"))
+    print(actionTrack)
     # plt.show()
 
 if pz:
@@ -67,10 +72,7 @@ cleanOrEat = False
 if load_model:
         # exp_name = "gpu_ctde_state_4x4__clean_up_simple__1__1695335842"
         # exp_name = "gpu_ctde_state_4x4_divergent__clean_up_simple__1__1695350009"
-
         # exp_name = "mappo_shared__pistonball__1475661751__1702916831"
-
-        exp_name = "ppo_single_small__clean_up_simple__489263223__1711101428"
         # exp_name = "ppo__clean_up_simple__1743393291__1702852185"
         # exp_name = "fixed_ppo_single_hard__clean_up_simple__86427174__1700575418"
         # exp_name = "fixed_ppo_single_easy_cpu__clean_up_simple__726506732__1700571979"
@@ -79,6 +81,14 @@ if load_model:
         # exp_name = "save_full_ppo_single_hard__clean_up_simple__121193687__1700102084"
         # exp_name = "noturn_gpu_ctde_state_multicoord__clean_up_simple__1__1697719103"
 
+        exp_name = "ppo_single_small__clean_up_simple__489263223__1711101428"
+        # exp_name = "ppo_single_4x4_divergent_2eat__clean_up_simple__49690449__1712575972"
+        # exp_name = "ppo_single_4x4_divergent__clean_up_simple__1317678540__1712571018"
+        # exp_name = "ppo_single_large__clean_up_simple__1045332753__1711356834"
+        # exp_name = "ppo_single_8x8_divergent_2eat__clean_up_simple__1487285556__1712678194"
+        # exp_name = "ppo_single_8x8_divergent__clean_up_simple__1436946905__1712167722"
+        # exp_name = "ppo_single_16x16__clean_up_simple__566093860__1712134889"
+
         modeldir = "model/LATEST/"
         num_actions = env.action_space(env.possible_agents[0]).n
         if ma:
@@ -86,7 +96,7 @@ if load_model:
         else:
             ppo = PPO(num_actions)#MAPPO 
         print("INIT")
-        for param in ppo.feature_extractor.parameters():
+        for param in ppo.feature_extractor.parameters():   
             print(param.data)
             break
         print("LOAD WEIGHTS")
@@ -96,7 +106,8 @@ if load_model:
             print(param.data)
             break
         ppo.actor.eval()
-
+else: 
+    exp_name = "random"
 while env.agents:
     if load_model:
         obs = batchify_obs(observations,"cpu")
@@ -108,26 +119,25 @@ while env.agents:
     else: 
         actions = {agent: env.action_space(agent).sample() for agent in env.agents}
     observations, rewards, terminations, truncations, infos = env.step(actions)
-    if(actions["player_0"]==5):
-        numCleanAttempts+=1
-        print("ATTEMPT CLEAN")
-    if(infos["player_0"][1]==1):    
-        numCleanSuccesses+=1
-        print("SUCCESS CLEAN")
-        print("VECTOR REWARD: ",infos)
-        actionTrack.append(-1)
-        cleanOrEat = True
     i = 0
     for agent in env.agents:
+        print(infos[agent])
         if (i>len(r)-1):
             r.append(rewards[agent])
         else:
              r[i]+= rewards[agent]
-        if(rewards[agent]>0):
+        if(actions[agent]==5):
+            numCleanAttempts+=1
+            print("ATTEMPT CLEAN")
+        if(infos[agent][1]==1):#Vector Reward    
+            numCleanSuccesses+=1
+            cleanOrEat = True
+            actionTrack.append(-1)
+            print("SUCCESS CLEAN")
+        if(infos[agent][0]==1):
             cleanOrEat = True
             actionTrack.append(1)
             print("EAT")
-            print("VECTOR REWARD: ",infos)
         i+=1
     steps+=1
     print("Step: ",steps," | Cumulative Rewards: ",r)    
@@ -140,14 +150,22 @@ while env.agents:
 print("Episodic Return: ",r)
 print("Mean Episodic Returns: ",np.mean(r))
 
-cleanWasteRatio =  numCleanSuccesses/ numCleanAttempts
+cleanEfficiencyRatio =  numCleanSuccesses/ numCleanAttempts if numCleanAttempts != 0 else 0
 appleRatio = np.mean(r) / steps
 cleanRatio =  numCleanSuccesses/ steps
-print("Clean Attempts: ",numCleanAttempts, "Clean Successes: ", numCleanSuccesses, " =", cleanWasteRatio)
+print("Clean Attempts: ",numCleanAttempts, "Clean Successes: ", numCleanSuccesses, " =", cleanEfficiencyRatio)
 print("Mean Episodic Returns: ",np.mean(r))
 print("Apple Ratio: ", appleRatio)
 print("Clean Ratio: ", cleanRatio)
-
+print(exp_name)
 if plot_actions:
     plot(actionTrack)
 env.close()
+
+fields = ['Exp', 'Num Steps', 'Clean Attempts', 'Clean Successes', 'Clean Efficiency Ratio', 'Apple Ratio', 'Clean Ratio', 'Mean Episodic Return']
+filename = "exp_log.csv"
+with open(filename, 'a') as csvfile:
+    writer = csv.DictWriter(csvfile, fieldnames=fields)
+    # writer.writeheader()
+    myDict = [{'Exp': exp_name, 'Num Steps': steps, 'Clean Attempts': numCleanAttempts, 'Clean Successes': numCleanSuccesses, 'Clean Efficiency Ratio': cleanEfficiencyRatio, 'Apple Ratio': appleRatio, 'Clean Ratio': cleanRatio, 'Mean Episodic Return': np.mean(r)}]
+    writer.writerows(myDict)
