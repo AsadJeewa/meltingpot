@@ -32,20 +32,21 @@ _ENABLE_DEBUG_OBSERVATIONS = False
 
 class Mode(Enum):
     SINGLE_3x1 = 1
-    SINGLE_4x4 = 2
-    SINGLE_8x8 = 3
-    SINGLE_16x16 = 4
-    MULTI_ALONE_3x2 = 5
-    MULTI_ALONE_4x4 = 6
-    MULTI_COOP_4x4 = 7
-    MULTI_COOP_8x8 = 8
+    SINGLE_4x4_EASY = 2
+    SINGLE_8x8_EASY = 3
+    SINGLE_8x8_HARD = 4
+    SINGLE_16x16_EASY = 5
+    SINGLE_16x16_HARD = 6
+    MULTI_ALONE_3x2 = 7
+    MULTI_ALONE_4x4 = 8
+    MULTI_COOP_4x4 = 9
+    MULTI_COOP_8x8 = 10
 
 #BEGIN DEBUG
+rewardForCleaning = 0.0
+rewardForEating = 1.0
+mode = Mode.SINGLE_8x8_EASY
 
-divergent = True
-divergent_eating_reward = 2.0
-divergent_cleaning_reward = 1.0
-mode = Mode.SINGLE_4x4
 print("*************",mode)
 #END DEBUG
 
@@ -63,7 +64,7 @@ B
     dirtSpawnProbability=1.0
 # 3x1
 
-elif mode == Mode.SINGLE_4x4:
+elif mode == Mode.SINGLE_4x4_EASY:
     ASCII_MAP = """
 FFFF
 P   
@@ -78,7 +79,26 @@ BBBB
     dirtSpawnProbability=1.0
 # 4x4
 
-elif mode == Mode.SINGLE_8x8:
+elif mode == Mode.SINGLE_8x8_EASY:
+    ASCII_MAP = """
+FFFFFFFF
+FFFFFFFF
+P       
+        
+                
+       P
+BBBBBBBB
+BBBBBBBB
+"""
+    num_agents = 1   
+    num_steps = 1000
+    maxAppleGrowthRate=1.0/8.0
+    thresholdDepletion=1.0
+    thresholdRestoration=0.0
+    dirtSpawnProbability=0.25
+# 8x8
+
+elif mode == Mode.SINGLE_8x8_HARD:
     ASCII_MAP = """
 FFFFFFFF
 P       
@@ -90,14 +110,42 @@ P
 BBBBBBBB
 """
     num_agents = 1   
-    num_steps = 1000 
+    num_steps = 1000
     maxAppleGrowthRate=1.0/8.0
     thresholdDepletion=1.0
     thresholdRestoration=0.0
     dirtSpawnProbability=0.25
 # 8x8
 
-elif mode == Mode.SINGLE_16x16:
+elif mode == Mode.SINGLE_16x16_EASY:
+    ASCII_MAP = """
+FFFFFFFFFFFFFFFF
+FFFFFFFFFFFFFFFF
+FFFFFFFFFFFFFFFF
+FFFFFFFFFFFFFFFF
+P               
+                
+                
+                
+                
+                                
+                
+
+               P
+BBBBBBBBBBBBBBBB
+BBBBBBBBBBBBBBBB
+BBBBBBBBBBBBBBBB
+BBBBBBBBBBBBBBBB
+"""
+    num_agents = 1   
+    num_steps = 1000 
+    maxAppleGrowthRate=1.0/16.0
+    thresholdDepletion=1.0
+    thresholdRestoration=0.0
+    dirtSpawnProbability=0.25
+# 16x16
+
+elif mode == Mode.SINGLE_16x16_HARD:
     ASCII_MAP = """
 FFFFFFFFFFFFFFFF
 P               
@@ -136,6 +184,7 @@ BB
     thresholdDepletion=0.75
     thresholdRestoration=0.5
     dirtSpawnProbability=1.0
+    
 # 3x2
 elif mode == Mode.MULTI_ALONE_4x4:
     ASCII_MAP = """
@@ -836,7 +885,6 @@ def create_avatar_object(player_idx: int,
                   "spriteMap": custom_sprite_map,
                   "useAbsoluteCoordinates": True,
                   "randomizeInitialOrientation": False,
-
               }
           },
           {
@@ -860,14 +908,14 @@ def create_avatar_object(player_idx: int,
                   "cooldownTime": 2,
                   "beamLength": 1,
                   "beamRadius": 0,
-                  "rewardForCleaning": divergent_cleaning_reward if divergent else 0.0, #TO FIX
+                  "rewardForCleaning": rewardForCleaning,
               }
           },
           {
               "component": "Taste",
               "kwargs": {
                   "role": "free",
-                  "rewardForEating": divergent_eating_reward if divergent else 1.0,
+                  "rewardForEating": rewardForEating,
               }
           },
           {

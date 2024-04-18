@@ -446,12 +446,12 @@ function Taste:cleaned()
   local vector_reward = self.gameObject:getComponent('AllNonselfCumulants'):getPlayerVectorRewards(playerIndex)
   if self._config.role == 'cleaner' then
     self.gameObject:getComponent('Avatar'):addReward(rewardAmount) --not used as free role
-    vector_reward(2):fill(1) --TO FIX
+    vector_reward(2):fill(1) --TO FIX DIVERGENT
   elseif self._config.role == 'consumer' then
     self.gameObject:getComponent('Avatar'):addReward(0.0)
   else
     self.gameObject:getComponent('Avatar'):addReward(rewardAmount)
-    vector_reward(2):fill(1) --TO FIX
+    vector_reward(2):fill(1) --TO FIX DIVERGENT
   end
 end
 
@@ -462,10 +462,11 @@ function Taste:consumed()
   if self._config.role == 'cleaner' then
     self.gameObject:getComponent('Avatar'):addReward(0.0)
   elseif self._config.role == 'consumer' then
-    vector_reward(1):fill(rewardAmount)
+    self.gameObject:getComponent('Avatar'):addReward(rewardAmount)
+    vector_reward(1):fill(1)--TO FIX DIVERGENT
   else
     self.gameObject:getComponent('Avatar'):addReward(rewardAmount)
-    vector_reward(1):fill(rewardAmount)
+    vector_reward(1):fill(1)--TO FIX DIVERGENT
   end
   self:setCumulant()
 end

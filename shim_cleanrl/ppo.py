@@ -41,12 +41,12 @@ def parse_args():
     parser.add_argument("--epochs", type=int, default=3,
         help="the K epochs to update the policy")
     parser.add_argument("--num_steps", type=int, default=1000,
-        help="the number of steps to run in each environment per policy rollout")
+        help="the number of steps to run in each environment per policy rollout") #TODO FIX MUST ALIGN WITH Meltingpot
     parser.add_argument("--num_stacked", type=int, default=4,
-        help="the number of stacked framed")
+        help="the number of stacked frames")
     parser.add_argument("--frame_size", type=int, default=64,#32
         help="the frame size of observations")
-    parser.add_argument("--chekpoint_window", type=int, default=10,
+    parser.add_argument("--checkpoint_window", type=int, default=10,
         help="checkpoint window size")
     parser.add_argument("--anneal_lr", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
         help="Toggle learning rate annealing for policy and value networks")
@@ -118,14 +118,13 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     num_steps = args.num_steps #default 1000
-    frame_size = (args.frame_size, args.frame_size)
     stack_size = args.num_stacked
 
     """ ENV SETUP """
     env = load_meltingpot(args.env_id)
     env = MeltingPotCompatibilityV0(env, render_mode="None")
     env = color_reduction_v0(env, 'full') # grayscale
-    env = resize_v1(env, frame_size[0], frame_size[1]) # resize and stack images
+    env = resize_v1(env, args.frame_size, args.frame_size) # resize and stack images
     env = frame_stack_v1(env, stack_size=stack_size)
 
     num_agents = len(env.possible_agents)
@@ -137,11 +136,11 @@ if __name__ == "__main__":
 
     total_episodic_return = 0
     current_best = 0
-    chekpoint_window = args.chekpoint_window
-    window_episodic_return = np.zeros(chekpoint_window)
+    checkpoint_window = args.checkpoint_window
+    window_episodic_return = np.zeros(checkpoint_window)
 
     # ALGO Logic: Storage setup
-    obs = torch.zeros((num_steps, num_agents, stack_size, *frame_size)).to(device)#EPISODE
+    obs = torch.zeros((num_steps, num_agents, stack_size, *((args.frame_size, args.frame_size)))).to(device)#EPISODE
     actions = torch.zeros(num_steps, num_agents).to(device)
     logprobs = torch.zeros(num_steps, num_agents).to(device)
     rewards = torch.zeros(num_steps, num_agents).to(device)
@@ -276,13 +275,15 @@ if __name__ == "__main__":
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
-        if(update > chekpoint_window):
+        if(update > checkpoint_window):
             window_episodic_return = np.delete(window_episodic_return,0)
             window_episodic_return = np.append(window_episodic_return, total_episodic_return)
         else:
+            print("EARLY: ",window_episodic_return, total_episodic_return)
             window_episodic_return[index] = total_episodic_return
             index+=1
 
+        print("MEAN: ",np.mean(window_episodic_return))
         if np.mean(window_episodic_return) > current_best:
             torch.save(ppo.feature_extractor.state_dict(), "model/feat_"+exp_name)
             torch.save(ppo.actor.state_dict(), "model/actor_"+exp_name)
@@ -290,7 +291,9 @@ if __name__ == "__main__":
             print("SAVE")
 
         print(f"Episodic Return: {total_episodic_return}")
+        print(np.mean(total_episodic_return))
         writer.add_scalar("mean_episodic_return",total_episodic_return, global_step)
+        writer.add_scalar("test_mean_episodic_return",np.mean(total_episodic_return), global_step)
 
         print(f"Episode Length: {global_step}")
         print(f"Value Loss: {v_loss.item()}")
