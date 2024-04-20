@@ -85,7 +85,7 @@ FFFFFFFF
 FFFFFFFF
 P       
         
-                
+        
        P
 BBBBBBBB
 BBBBBBBB
@@ -128,9 +128,8 @@ P
                 
                 
                 
-                                
                 
-
+                
                P
 BBBBBBBBBBBBBBBB
 BBBBBBBBBBBBBBBB
