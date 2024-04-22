@@ -43,11 +43,14 @@ class Mode(Enum):
     MULTI_COOP_8x8 = 10
 
 #BEGIN DEBUG
-rewardForCleaning = 0.0
-rewardForEating = 1.0
+rewardForEating = 1.0 #INCREASE IF DIVERGENT
+rewardForCleaning = 0.0 #SET ZERO IF NOT DIVERGENT
 mode = Mode.SINGLE_8x8_EASY
-
-print("*************",mode)
+print("***********DEBUG***********")
+print("Reward for cleaning: ",rewardForCleaning)
+print("Reward for eating: ",rewardForEating)
+print("Mode: ",mode)
+print("***********DEBUG***********")
 #END DEBUG
 
 if mode == Mode.SINGLE_3x1:

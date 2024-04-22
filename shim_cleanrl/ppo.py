@@ -295,7 +295,7 @@ if __name__ == "__main__":
         writer.add_scalar("mean_episodic_return",total_episodic_return, global_step)
         writer.add_scalar("test_mean_episodic_return",np.mean(total_episodic_return), global_step)
 
-        print(f"Episode Length: {global_step}")
+        print(f"Global Step: {global_step}")
         print(f"Value Loss: {v_loss.item()}")
         print(f"Policy Loss: {pg_loss.item()}")
         print(f"Old Approx KL: {old_approx_kl.item()}")

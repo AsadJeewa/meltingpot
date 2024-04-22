@@ -126,6 +126,10 @@ while env.agents:
             r.append(rewards[agent])
         else:
              r[i]+= rewards[agent]
+        if(infos[agent][0]==1):
+            cleanOrEat = True
+            actionTrack.append(1)
+            print("EAT")
         if(actions[agent]==5):
             numCleanAttempts+=1
             print("ATTEMPT CLEAN")
@@ -134,10 +138,6 @@ while env.agents:
             cleanOrEat = True
             actionTrack.append(-1)
             print("SUCCESS CLEAN")
-        if(infos[agent][0]==1):
-            cleanOrEat = True
-            actionTrack.append(1)
-            print("EAT")
         i+=1
     steps+=1
     print("Step: ",steps," | Cumulative Rewards: ",r)    

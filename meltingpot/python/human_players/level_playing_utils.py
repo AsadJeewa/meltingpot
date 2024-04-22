@@ -32,11 +32,11 @@ import pygame
 # ASAD DEBUG START
 import os
 import sys
-os.environ["SDL_VIDEODRIVER"] = "x11"
-
-pygame.init()
-pygame.display.init()
-print(pygame.display.list_modes()) #Get list of available fullscreen modes
+# os.environ["SDL_VIDEODRIVER"] = "x11"
+# pygame.init()
+# pygame.display.init()
+# print(pygame.display.list_modes()) #Get list of available fullscreen modes
+screen = pygame.display.set_mode((1280, 720), pygame.SCALED | pygame.FULLSCREEN)
 # ASAD DEBUG END
 
 import dmlab2d
@@ -275,6 +275,8 @@ def run_episode(
     initial_player_index: Initial index of the player to play as. Defaults to 0.
       (Players are always switchable via the tab key.)
   """
+  k = 0
+  numClean = 0
   full_config.lab2d_settings.update(config_overrides)
   if player_prefixes is None:
     player_count = full_config.lab2d_settings.get('numPlayers', 1)
@@ -343,7 +345,11 @@ def run_episode(
 
       # Compute next timestep
       actions = action_reader.step(player_prefix) if player_count else []
+      if(actions["1.fireClean"]==1):
+        print("ATTEMPT CLEAN")
+        numClean+=1
       timestep = env.step(actions)
+      k+=1
       if timestep.step_type == dm_env.StepType.LAST:
         if reset_env_when_done:
           timestep = env.reset()
@@ -351,6 +357,11 @@ def run_episode(
           break
 
       rewards = _get_rewards(timestep)
+      if(timestep.observation["1.VECTOR_REWARD"][0]==1):
+        print("EAT", rewards)    
+      if(timestep.observation["1.VECTOR_REWARD"][1]==1):
+        print("SUCCESS CLEAN", rewards)  
+
       for i, prefix in enumerate(player_prefixes):
         if verbose_fn:
           verbose_fn(timestep, i, player_index)
@@ -375,8 +386,7 @@ def run_episode(
         else:
           # Fall back to default_observation.
           obs = timestep.observation[default_observation]
-        obs = np.transpose(obs, (1, 0, 2))  # PyGame is column major!
-
+        obs = np.transpose(obs, (1, 0, 2))  # PyGame is column major!  
         surface = pygame.surfarray.make_surface(obs)
         rect = surface.get_rect()
 
