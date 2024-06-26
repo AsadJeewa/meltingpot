@@ -4,6 +4,8 @@ import os
 import random
 import time
 from distutils.util import strtobool
+from dataclasses import dataclass
+import tyro
 
 import numpy as np
 import torch
@@ -11,61 +13,63 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.distributions.categorical import Categorical
 from torch.utils.tensorboard import SummaryWriter
-from supersuit import color_reduction_v0, frame_stack_v1, resize_v1
-
-from utils import batchify_obs, batchify, unbatchify, layer_init
-from shimmy import MeltingPotCompatibilityV0
-from shimmy.utils.meltingpot import load_meltingpot
+from utils import batchify_obs, batchify, unbatchify, layer_init, make_env
 
 #BEGIN DEBUG
 #END DEBUG
 
-def parse_args():
-    # fmt: off
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--exp_name", type=str, default=os.path.basename(__file__).rstrip(".py"),
-        help="the name of this experiment")
-    parser.add_argument("--seed", type=int, default=random.randint(0,np.iinfo(np.int32).max),
-        help="seed of the experiment")
+@dataclass
+class Args:
+    exp_name: str = os.path.basename(__file__)[: -len(".py")]
+    """the name of this experiment"""
+    seed: int = random.randint(0,np.iinfo(np.int32).max)
+    """seed of the experiment"""
+    torch_deterministic: bool = True
+    """if toggled, `torch.backends.cudnn.deterministic=False`"""
+    cuda: bool = True
+    """if toggled, cuda will be enabled by default"""
+
     # Algorithm specific arguments
-    parser.add_argument("--env_id", type=str, default="clean_up_simple",
-        help="the id of the environment")
-    parser.add_argument("--total_timesteps", type=float, default=1e7,
-        help="total timesteps of the experiments")
-    parser.add_argument("--batch_size", type=int, default=32,
-        help="batch size")
-    parser.add_argument("--learning_rate", type=float, default=0.001,
-        help="the learning rate of the optimizer")
-    parser.add_argument("--norm_adv", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
-        help="Toggles advantages normalization")
-    parser.add_argument("--epochs", type=int, default=3,
-        help="the K epochs to update the policy")
-    parser.add_argument("--num_steps", type=int, default=1000,
-        help="the number of steps to run in each environment per policy rollout") #TODO FIX MUST ALIGN WITH Meltingpot
-    parser.add_argument("--num_stacked", type=int, default=4,
-        help="the number of stacked frames")
-    parser.add_argument("--frame_size", type=int, default=64,#32
-        help="the frame size of observations")
-    parser.add_argument("--checkpoint_window", type=int, default=10,
-        help="checkpoint window size")
-    parser.add_argument("--anneal_lr", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
-        help="Toggle learning rate annealing for policy and value networks")
-    parser.add_argument("--gamma", type=float, default=0.99,
-        help="the discount factor gamma")
-    parser.add_argument("--ent_coef", type=float, default=0.1,#default 0.01
-        help="coefficient of the entropy")
-    parser.add_argument("--vf_coef", type=float, default=0.1,#default=0.5
-        help="coefficient of the value function")
-    parser.add_argument("--clip_coef", type=float, default=0.1,
-        help="the surrogate clipping coefficient")
-    parser.add_argument("--clip_vloss", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
-        help="Toggles whether or not to use a clipped loss for the value function, as per the paper.")
-    parser.add_argument("--max_grad_norm", type=float, default=0.5,
-        help="the maximum norm for the gradient clipping")
-    parser.add_argument("--target_kl", type=float, default=None,
-        help="the target KL divergence threshold")
-    args = parser.parse_args()
-    return args
+    env_id: str = "clean_up_simple"
+    """the id of the environment"""
+    total_timesteps: int = 1e7
+    """total timesteps of the experiments"""
+    batch_size: int = 32
+    """the batch size"""
+    learning_rate: float = 0.001
+    """the learning rate of the optimizer"""
+    num_steps: int = 1000
+    """the number of steps to run in each environment per policy rollout"""
+    anneal_lr: bool = True
+    """Toggle learning rate annealing for policy and value networks"""
+    gamma: float = 0.99
+    """the discount factor gamma"""
+    gae_lambda: float = 0.95
+    """the lambda for the general advantage estimation"""
+    update_epochs: int = 3
+    """the K epochs to update the policy"""
+    norm_adv: bool = True
+    """Toggles advantages normalization"""
+    clip_coef: float = 0.1
+    """the surrogate clipping coefficient"""
+    clip_vloss: bool = True
+    """Toggles whether or not to use a clipped loss for the value function, as per the paper."""
+    ent_coef: float = 0.1
+    """coefficient of the entropy"""
+    vf_coef: float = 0.1
+    """coefficient of the value function"""
+    max_grad_norm: float = 0.5
+    """the maximum norm for the gradient clipping"""
+    target_kl: float = None
+    """the target KL divergence threshold"""
+
+    # added
+    stack_size: int = 4
+    """the number of stacked frames"""
+    frame_size: int=64
+    """the frame size of observations"""
+    checkpoint_window: int=10
+    """checkpoint window size"""
 
 class PPO(nn.Module):
     def __init__(self, num_actions):
@@ -100,9 +104,9 @@ class PPO(nn.Module):
         return action, probs.log_prob(action), probs.entropy(), self.critic(hidden)
     
 if __name__ == "__main__":
-    args = parse_args()
-    exp_name = f"{args.exp_name}__{args.env_id}__{args.seed}__{int(time.time())}"
-    writer = SummaryWriter(log_dir="runs/"+exp_name)
+    args = tyro.cli(Args)
+    run_name = f"{args.exp_name}__{args.env_id}__{args.seed}__{int(time.time())}"
+    writer = SummaryWriter(log_dir="runs/"+run_name)
     writer.add_text(
         "hyperparameters",
         "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
@@ -112,21 +116,15 @@ if __name__ == "__main__":
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
-    torch.backends.cudnn.deterministic = True
-    torch.use_deterministic_algorithms(True)
+    torch.backends.cudnn.deterministic = args.torch_deterministic
+    torch.use_deterministic_algorithms(args.torch_deterministic)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
 
     num_steps = args.num_steps #default 1000
-    stack_size = args.num_stacked
 
     """ ENV SETUP """
-    env = load_meltingpot(args.env_id)
-    env = MeltingPotCompatibilityV0(env, render_mode="None")
-    env = color_reduction_v0(env, 'full') # grayscale
-    env = resize_v1(env, args.frame_size, args.frame_size) # resize and stack images
-    env = frame_stack_v1(env, stack_size=stack_size)
-
+    env = make_env(args.env_id,args.frame_size,args.stack_size)
     num_agents = len(env.possible_agents)
     num_actions = env.action_space(env.possible_agents[0]).n
     observation_size = env.observation_space(env.possible_agents[0]).shape
@@ -135,12 +133,13 @@ if __name__ == "__main__":
     optimizer = optim.Adam(ppo.parameters(), lr=args.learning_rate, eps=1e-5)
 
     total_episodic_return = 0
+    apple_episodic_return = 0
     current_best = 0
     checkpoint_window = args.checkpoint_window
     window_episodic_return = np.zeros(checkpoint_window)
 
     # ALGO Logic: Storage setup
-    obs = torch.zeros((num_steps, num_agents, stack_size, *((args.frame_size, args.frame_size)))).to(device)#EPISODE
+    obs = torch.zeros((num_steps, num_agents, args.stack_size, *((args.frame_size, args.frame_size)))).to(device)#EPISODE
     actions = torch.zeros(num_steps, num_agents).to(device)
     logprobs = torch.zeros(num_steps, num_agents).to(device)
     rewards = torch.zeros(num_steps, num_agents).to(device)
@@ -161,6 +160,7 @@ if __name__ == "__main__":
             optimizer.param_groups[0]["lr"] = lrnow
         
         total_episodic_return = 0
+        apple_episodic_return = 0
 
         next_obs, info = env.reset(seed=args.seed)
         # next_obs = next_obs[env.possible_agents[0]]
@@ -185,7 +185,6 @@ if __name__ == "__main__":
             next_obs, reward, term, trunc, info = env.step(unbatchify(action, env))
             rewards[step] = batchify(reward, device)
             total_episodic_return += rewards[step].cpu().numpy()
-
         # bootstrap value if not done
         with torch.no_grad():
             next_value = ppo.get_value(obs[step]).reshape(1, -1)
@@ -199,7 +198,7 @@ if __name__ == "__main__":
                     nextnonterminal = 1.0 - terms[t + 1]
                     nextvalues = values[t + 1]
                 delta = rewards[t] + args.gamma * nextvalues * nextnonterminal - values[t]
-                advantages[t] = lastgaelam = delta + args.gamma * args.gamma * nextnonterminal * lastgaelam#args gae lambda
+                advantages[t] = lastgaelam = delta + args.gamma * args.gae_lambda * nextnonterminal * lastgaelam#args gae lambda
             returns = advantages + values
 
         # convert our episodes to batch of individual transitions
@@ -219,7 +218,7 @@ if __name__ == "__main__":
         ppo.critic.train()
         print("TRAINING")
         clipfracs = []
-        for epoch in range(args.epochs):
+        for epoch in range(args.update_epochs):
             np.random.shuffle(b_inds)
             for start in range(0, len(b_obs) , args.batch_size):#minibatch
                 end = start + args.batch_size
@@ -285,15 +284,14 @@ if __name__ == "__main__":
 
         print("MEAN: ",np.mean(window_episodic_return))
         if np.mean(window_episodic_return) > current_best:
-            torch.save(ppo.feature_extractor.state_dict(), "model/feat_"+exp_name)
-            torch.save(ppo.actor.state_dict(), "model/actor_"+exp_name)
+            torch.save(ppo.feature_extractor.state_dict(), "model/feat_"+run_name)
+            torch.save(ppo.actor.state_dict(), "model/actor_"+run_name)
             current_best = np.mean(window_episodic_return)
             print("SAVE")
 
         print(f"Episodic Return: {total_episodic_return}")
-        print(np.mean(total_episodic_return))
+        print(f"Apple Episodic Return: {apple_episodic_return}")
         writer.add_scalar("mean_episodic_return",total_episodic_return, global_step)
-        writer.add_scalar("test_mean_episodic_return",np.mean(total_episodic_return), global_step)
 
         print(f"Global Step: {global_step}")
         print(f"Value Loss: {v_loss.item()}")
@@ -303,6 +301,7 @@ if __name__ == "__main__":
         print(f"Explained Variance: {explained_var.item()}")
         print("\n-------------------------------------------\n")
 
+        # writer.add_text("info/learning_rate", optimizer.param_groups[0]["lr"], global_step)
         # TRY NOT TO MODIFY: record rewards for plotting purposes
         writer.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], global_step)
         writer.add_scalar("losses/value_loss", v_loss.item(), global_step)
