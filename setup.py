@@ -67,7 +67,8 @@ setuptools.setup(
         'rx',
         'tensorflow-macos' if IS_M1_MAC else 'tensorflow',
         'shimmy',
-        'pymunk'
+        'pymunk',
+        'tyro'
     ],
     extras_require={
         # Dependencies required for rllib example.
