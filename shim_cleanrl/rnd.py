@@ -377,7 +377,7 @@ if __name__ == "__main__":
             # TRY NOT TO MODIFY: execute the game and log data.
             next_obs, reward, term, trunc, info = env.step(unbatchify(action, env))
             rewards[step] = batchify(reward, device)
-            total_episodic_return += curiosity_rewards[step].cpu().numpy()
+            total_episodic_return += rewards[step].cpu().numpy()
             curiosity_episodic_return += curiosity_rewards[step].cpu().numpy()
             rnd_next_obs = (
                 (
