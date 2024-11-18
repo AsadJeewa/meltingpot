@@ -45,13 +45,14 @@ class Mode(Enum):
 #BEGIN DEBUG
 rewardForEating = 1.0 #INCREASE IF DIVERGENT
 rewardForCleaning = 0.0 #SET ZERO IF NOT DIVERGENT
-mode = Mode.SINGLE_8x8_EASY
+mode = Mode.SINGLE_16x16_EASY
+#END DEBUG
+
 print("***********DEBUG***********")
 print("Reward for cleaning: ",rewardForCleaning)
 print("Reward for eating: ",rewardForEating)
 print("Mode: ",mode)
 print("***********DEBUG***********")
-#END DEBUG
 
 if mode == Mode.SINGLE_3x1:
     ASCII_MAP = """

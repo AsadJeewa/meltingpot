@@ -2,17 +2,25 @@ import torch
 import numpy as np
 from mappo_shared import MAPPO
 from ppo import PPO
+from rnd import RND
 from utils import batchify_obs
 from supersuit import color_reduction_v0, frame_stack_v1, resize_v1
 from matplotlib import pyplot as plt
 import seaborn as sb
 import os
 import csv
+from enum import Enum
 
-#DEBUG START
+class Mode(Enum):
+    PPO = 1
+    RND = 2
+    MAPPO = 3
+
+#BEGIN DEBUG
+mode = Mode.PPO
+
 load_model = True
 
-ma = False
 pz  = False
 pomdp = False
 
@@ -20,7 +28,7 @@ frame_size = (64, 64)
 stack_size = 4
 
 plot_actions = True
-#DEBUG END
+#END DEBUG
 
 def plot(actionTrack):
     sb.set_theme()
@@ -81,7 +89,8 @@ if load_model:
         # exp_name = "save_full_ppo_single_hard__clean_up_simple__121193687__1700102084"
         # exp_name = "noturn_gpu_ctde_state_multicoord__clean_up_simple__1__1697719103"
 
-        exp_name = "ppo_single_small__clean_up_simple__489263223__1711101428"
+        # modeldir = "model/LATEST/"
+        # exp_name = "ppo_single_small__clean_up_simple__489263223__1711101428"
         # exp_name = "ppo_single_4x4_divergent_2eat__clean_up_simple__49690449__1712575972"
         # exp_name = "ppo_single_4x4_divergent__clean_up_simple__1317678540__1712571018"
         # exp_name = "ppo_single_large__clean_up_simple__1045332753__1711356834"
@@ -89,32 +98,67 @@ if load_model:
         # exp_name = "ppo_single_8x8_divergent__clean_up_simple__1436946905__1712167722"
         # exp_name = "ppo_single_16x16__clean_up_simple__566093860__1712134889"
 
-        modeldir = "model/LATEST/"
+        # modeldir = "model/TO SORT/"
+        # exp_name = "ppo_single_8x8_EASY__clean_up_simple__1656085450__1713729116"
+        # exp_name = "ppo_single_16x16_EASY__clean_up_simple__1977516922__1713655691"
+        # exp_name = "ppo_single_16x16_EASY_divergent__clean_up_simple__824133424__1713655723"
+        # exp_name = "ppo_single_16x16_HARD__clean_up_simple__1466679100__1713788384"
+
+        modeldir = "model/PROPOSAL/"
+        # exp_name = "ppo_single_4x4__clean_up_simple__259130191__1713531040"
+        # exp_name = "ppo_single_4x4_divergent__clean_up_simple__1317678540__1712571018"
+        # exp_name = "ppo_single_4x4_divergent_2eat__clean_up_simple__49690449__1712575972"
+        # exp_name = "ppo_single_8x8_EASY__clean_up_simple__659332296__1713846172"
+        # exp_name = "ppo_single_8x8_EASY_divergent__clean_up_simple__1079662338__1713856553"
+        # exp_name = "ppo_single_8x8_EASY_divergent2eat__clean_up_simple__346379308__1713893904"
+        # exp_name = "ppo_single_8x8_HARD__clean_up_simple__1045332753__1711356834"
+        # exp_name = "ppo_single_8x8_HARD_divergent__clean_up_simple__1436946905__1712167722"
+        # exp_name = "ppo_single_8x8_HARD_divergent_2eat__clean_up_simple__1487285556__1712678194" #TOFIX HARD
+        # exp_name = "ppo_single_16x16_EASY__clean_up_simple__1977516922__1713655691"
+        # exp_name = "ppo_single_16x16_EASY_divergent__clean_up_simple__824133424__1713655723"
+        # exp_name = "ppo_single_16x16_EASY_divergent2eat__clean_up_simple__1893413582__1713897294"
+        # exp_name = "ppo_single_16x16_HARD__clean_up_simple__365792675__1713967594"
+        # exp_name = "ppo_single_16x16_HARD_divergent__clean_up_simple__2008978554__1713970172"
+        # exp_name = "ppo_single_16x16_HARD_divergent2eat__clean_up_simple__1524316540__1714052266"
+
+        # exp_name = "ppo_single_16x16_EASY__clean_up_simple__666553280__1719235407"
+        # exp_name = "ppo_single_16x16_HARD__clean_up_simple__1025840150__1719230476"
+        # exp_name = "ppo_16x16_HARD__clean_up_simple__359809924__1720654579"
+
+        # exp_name = "rnd_16x16_EASY__clean_up_simple__1336803665__1719498678"
+        # exp_name = "rnd_16x16_HARD__clean_up_simple__112723067__1719498579"
+
         num_actions = env.action_space(env.possible_agents[0]).n
-        if ma:
-            ppo = MAPPO(num_actions)
-        else:
-            ppo = PPO(num_actions)#MAPPO 
+        if mode == Mode.PPO:
+            model = PPO(num_actions)
+        elif mode == Mode.RND:
+            model = RND(num_actions)
+        elif mode == Mode.MAPPO:
+            model = MAPPO(num_actions)
+ 
         print("INIT")
-        for param in ppo.feature_extractor.parameters():   
+        for param in model.feature_extractor.parameters():   
             print(param.data)
             break
         print("LOAD WEIGHTS")
-        ppo.feature_extractor.load_state_dict(torch.load(modeldir+"feat_"+exp_name,  map_location=torch.device('cpu')))
-        ppo.actor.load_state_dict(torch.load(modeldir+"actor_"+exp_name,  map_location=torch.device('cpu')))
-        for param in ppo.feature_extractor.parameters():
+        model.feature_extractor.load_state_dict(torch.load(modeldir+"feat_"+exp_name,  map_location=torch.device('cpu')))
+        model.actor.load_state_dict(torch.load(modeldir+"actor_"+exp_name,  map_location=torch.device('cpu')))
+        for param in model.feature_extractor.parameters():
             print(param.data)
             break
-        ppo.actor.eval()
+        model.actor.eval()
 else: 
     exp_name = "random"
 while env.agents:
     if load_model:
         obs = batchify_obs(observations,"cpu")
-        if ma:
-            actions, logprobs, _, values = ppo.get_actions_and_values(obs, pomdp, len(env.possible_agents))
-        else:
-            actions, logprobs, _, values = ppo.get_action_and_value(obs)
+        if mode == Mode.PPO:
+            actions, logprobs, _, values = model.get_action_and_value(obs)
+        if mode == Mode.RND:
+            actions, logprobs, _, ext_values, int_values = model.get_action_and_value(obs)
+        elif mode == Mode.MAPPO:
+            actions, logprobs, _, values = model.get_actions_and_values(obs, pomdp, len(env.possible_agents))
+        
         actions = dict(zip(env.agents, actions.tolist()))
     else: 
         actions = {agent: env.action_space(agent).sample() for agent in env.agents}

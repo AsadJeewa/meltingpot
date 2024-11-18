@@ -33,6 +33,9 @@ class Args:
     """the wandb's project name"""
     wandb_entity: str = None
     """the entity (team) of wandb's project"""
+    #TODO Capture Video
+    capture_video: bool = False
+    """whether to capture videos of the agent performances (check out `videos` folder)"""
 
     # Algorithm specific arguments
     env_id: str = "clean_up_simple"
@@ -41,6 +44,9 @@ class Args:
     """total timesteps of the experiments"""
     learning_rate: float = 1e-4
     """the learning rate of the optimizer"""
+    #TODO Fix vectorisation
+    num_envs: int = 1
+    """the number of parallel game environments"""
     num_steps: int = 1000
     """the number of steps to run in each environment per policy rollout"""
     anneal_lr: bool = True
@@ -77,7 +83,7 @@ class Args:
     """coefficient of intrinsic reward"""
     int_gamma: float = 0.99
     """Intrinsic reward discount rate"""
-    num_iterations_obs_norm_init: int = 50
+    num_iterations_obs_norm_init: int = 1 #50
     """number of iterations to initialize the observations normalization parameters"""
 
     #TODO match to my ppo
@@ -156,6 +162,7 @@ class RND(nn.Module):
             layer_init(nn.Linear(128 * 8 * 8, 512)),
             nn.ReLU(),
         )
+        #extra layer for critic only, not actor
         self.extra_layer = nn.Sequential(layer_init(nn.Linear(512, 512), std=0.1), nn.ReLU())
         self.actor = nn.Sequential(
             layer_init(nn.Linear(512, 512), std=0.01),
@@ -282,11 +289,12 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
 
     # env setup
+    print("MAKE ENV")
     env = make_env(args.env_id,args.frame_size,args.stack_size)
+    print("DONE MAKE ENV")
     num_steps = args.num_steps #default 1000
     num_agents = len(env.possible_agents)
     num_actions = env.action_space(env.possible_agents[0]).n
-    observation_size = env.observation_space(env.possible_agents[0]).shape
     # envs.single_action_space = envs.action_space
     # envs.single_observation_space = envs.observation_space
     # envs = RecordEpisodeStatistics(envs)
@@ -332,18 +340,22 @@ if __name__ == "__main__":
     num_updates = int(args.total_timesteps // num_steps)
     
     #TODO CHECK
-    # print("Start to initialize observation normalization parameter.....")
-    # next_ob = []
-    # for step in range(args.num_steps * args.num_iterations_obs_norm_init):
-    #     acs = np.random.randint(0, num_actions)
-    #     next_obs, r, d, _ = envs.step(acs)
-    #     next_ob += s[:, 3, :, :].reshape([-1, 1, 84, 84]).tolist()
+    print("Start to initialize observation normalization parameter.....")
+    next_ob = []
+    for step in range(args.num_steps * args.num_iterations_obs_norm_init):
+        print(step)
+        next_obs, info = env.reset(seed=args.seed)
+        rand_action = torch.from_numpy(np.random.randint(0, num_actions,1))
+        next_obs, reward, term, trunc, info = env.step(unbatchify(rand_action, env))
+        next_ob += batchify_obs(next_obs, device)
+        print(batchify_obs(next_obs, device).shape)
 
-    #     if len(next_ob) % (args.num_steps * args.num_envs) == 0:
-    #         next_ob = np.stack(next_ob)
-    #         obs_rms.update(next_ob)
-    #         next_ob = []
-    # print("End to initialize...")
+        if len(next_ob) % (args.num_steps * args.num_envs) == 0:
+            next_ob = np.stack(next_ob)
+            obs_rms.update(next_ob)
+            next_ob = []
+    print("End to initialize...")
+
     index = 0
     for update in range(1, num_updates + 1):
         print("COLLECTING EXPERIENCE")
@@ -466,6 +478,8 @@ if __name__ == "__main__":
 
         # obs_rms.update(b_obs[:, 3, :, :].reshape(-1, 1, 84, 84).cpu().numpy())
         obs_rms.update(b_obs.cpu().numpy())
+        print(b_obs.shape)
+        exit()
 
         # Optimizing the policy and value network
         b_inds = np.arange(args.batch_size)
@@ -535,7 +549,12 @@ if __name__ == "__main__":
                 v_loss = ext_v_loss + int_v_loss
                 entropy_loss = entropy.mean()
                 loss = pg_loss - args.ent_coef * entropy_loss + v_loss * args.vf_coef + forward_loss
-
+                print("LOSS: ", loss.item()) 
+                print("PG: ",pg_loss.item())
+                print("ENT: ",args.ent_coef, entropy_loss.item())
+                print("V: ",v_loss.item(), args.vf_coef)
+                print("FORW: ",forward_loss.item())
+                exit()
                 optimizer.zero_grad()
                 loss.backward()
                 if args.max_grad_norm:

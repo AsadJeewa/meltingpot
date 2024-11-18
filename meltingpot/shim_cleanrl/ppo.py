@@ -28,9 +28,19 @@ class Args:
     """if toggled, `torch.backends.cudnn.deterministic=False`"""
     cuda: bool = True
     """if toggled, cuda will be enabled by default"""
+    track: bool = False
+    """if toggled, this experiment will be tracked with Weights and Biases"""
+    wandb_project_name: str = "mpot_cleanrl"
+    """the wandb's project name"""
+    wandb_entity: str = None
+    """the entity (team) of wandb's project"""
+    #TODO Capture Video
+    capture_video: bool = False
+    """whether to capture videos of the agent performances (check out `videos` folder)"""
+
 
     # Algorithm specific arguments
-    env_id: str = "clean_up_simple"
+    env_id: str = "clean_up_simple" #"MiniGrid-Empty-5x5-v0"
     """the id of the environment"""
     total_timesteps: int = 1e7
     """total timesteps of the experiments"""
@@ -38,6 +48,9 @@ class Args:
     """the batch size"""
     learning_rate: float = 0.001
     """the learning rate of the optimizer"""
+    #TODO fix vectorisation
+    num_envs: int = 1
+    """the number of parallel game environments"""
     num_steps: int = 1000
     """the number of steps to run in each environment per policy rollout"""
     anneal_lr: bool = True
@@ -70,6 +83,8 @@ class Args:
     """the frame size of observations"""
     checkpoint_window: int=10
     """checkpoint window size"""
+    shimmy: bool=False
+    """shimmy env (melting pot)"""
 
 class PPO(nn.Module):
     def __init__(self, num_actions):
@@ -103,9 +118,19 @@ class PPO(nn.Module):
             action = probs.sample()
         return action, probs.log_prob(action), probs.entropy(), self.critic(hidden)
     
-if __name__ == "__main__":
+def main():
     args = tyro.cli(Args)
     run_name = f"{args.exp_name}__{args.env_id}__{args.seed}__{int(time.time())}"
+    if args.track:
+        wandb.init(
+            project=args.wandb_project_name,
+            entity=args.wandb_entity,
+            sync_tensorboard=True,
+            config=vars(args),
+            name=run_name,
+            monitor_gym=True,
+            save_code=True,
+        )
     writer = SummaryWriter(log_dir="runs/"+run_name)
     writer.add_text(
         "hyperparameters",
@@ -120,15 +145,18 @@ if __name__ == "__main__":
     torch.use_deterministic_algorithms(args.torch_deterministic)
 
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
-
     num_steps = args.num_steps #default 1000
 
     """ ENV SETUP """
-    env = make_env(args.env_id,args.frame_size,args.stack_size)
-    num_agents = len(env.possible_agents)
-    num_actions = env.action_space(env.possible_agents[0]).n
-    observation_size = env.observation_space(env.possible_agents[0]).shape
-
+    env = make_env(args.env_id,args.frame_size,args.stack_size, args.shimmy, args.capture_video, run_name)
+    print(env)
+    if(args.shimmy):
+        num_agents = len(env.possible_agents)
+        num_actions = env.action_space(env.possible_agents[0]).n
+    else:
+        num_agents = 1
+        num_actions = env.action_space[0].n
+    
     ppo = PPO(num_actions).to(device)
     optimizer = optim.Adam(ppo.parameters(), lr=args.learning_rate, eps=1e-5)
 
@@ -166,11 +194,15 @@ if __name__ == "__main__":
         # next_obs = next_obs[env.possible_agents[0]]
         # next_obs = np.swapaxes(next_obs,0,2)
         # next_obs = torch.from_numpy(np.expand_dims(next_obs, axis=0))#add aghent dim for pz compatability
-        next_term = {env.possible_agents[0]: False}
+        if args.shimmy: 
+            next_term = {env.possible_agents[0]: False}
+        else: 
+            next_term = {'agent': False} #TODO Fix
         for step in range(0, args.num_steps):
             global_step += 1
             obs[step] = batchify_obs(next_obs, device)
             terms[step] = batchify(next_term, device)
+
             # ALGO LOGIC: action logic
             ppo.feature_extractor.eval() #TODO Check
             ppo.actor.eval() #TODO Check
@@ -292,6 +324,8 @@ if __name__ == "__main__":
         print(f"Episodic Return: {total_episodic_return}")
         print(f"Apple Episodic Return: {apple_episodic_return}")
         writer.add_scalar("mean_episodic_return",total_episodic_return, global_step)
+        if args.track:
+            wandb.log({"mean_episodic_return": total_episodic_return})
 
         print(f"Global Step: {global_step}")
         print(f"Value Loss: {v_loss.item()}")
@@ -315,3 +349,19 @@ if __name__ == "__main__":
         writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
 
     writer.close()
+
+if __name__ == "__main__":
+    args = tyro.cli(Args)
+    if args.track:
+        import wandb
+        sweep_configuration = {
+            "method": "random",
+            "metric": {"goal": "minimize", "name": "total_episodic_return"},
+            "parameters": {
+                "learning_rate": {"min": 0.00001, "max": 0.01},
+            },
+        }
+        sweep_id = wandb.sweep(sweep=sweep_configuration, project=args.wandb_project_name)
+        wandb.agent(sweep_id, function=main, count=10)
+    else:
+        main()

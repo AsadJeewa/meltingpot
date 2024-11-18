@@ -11,7 +11,8 @@ import torch.optim as optim
 from supersuit import color_reduction_v0, frame_stack_v1, resize_v1
 from torch.distributions.categorical import Categorical
 from torch.utils.tensorboard import SummaryWriter
-from pettingzoo.butterfly import pistonball_v6
+from pettingzoo.butterfly import pistonball_v6, cooperative_pong_v5
+from pettingzoo.mpe import simple_spread_v3
 
 
 from utils import batchify_obs, batchify, unbatchify, layer_init
@@ -48,7 +49,7 @@ def parse_args():
         help="the number of stacked framed")
     parser.add_argument("--frame_size", type=int, default=64,#32
         help="the frame size of observations")
-    parser.add_argument("--chekpoint_window", type=int, default=10,
+    parser.add_argument("--checkpoint_window", type=int, default=10,
         help="checkpoint window size")
     parser.add_argument("--anneal_lr", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
         help="Toggle learning rate annealing for policy and value networks")
@@ -66,6 +67,8 @@ def parse_args():
         help="if toggled, prosocial training")
     parser.add_argument("--clip_vloss", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
         help="Toggles whether or not to use a clipped loss for the value function, as per the paper.")
+    parser.add_argument("--pomdp", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
+        help="Whether observable are full =y observable.")
     parser.add_argument("--max_grad_norm", type=float, default=0.5,
         help="the maximum norm for the gradient clipping")
     parser.add_argument("--target_kl", type=float, default=None,
@@ -93,10 +96,13 @@ class MAPPO(nn.Module):
         self.actor = layer_init(nn.Linear(512, num_actions), std=0.01)#predict actions 0,1,2 for one agent (policy)
         self.critic = layer_init(nn.Linear(512, 1))#predict value (given state)
 
-    def get_values(self, x):
-        return self.critic(self.feature_extractor(x / 255.0))# get value of state for each agent
+    def get_values(self, x, pomdp):
+        if pomdp:
+            return self.critic(self.feature_extractor(x / 255.0))# get value of state for each agent
+        else: 
+            return self.critic(self.feature_extractor(x / 255.0)[0])# get value of state for each agent
 
-    def get_actions_and_values(self, x, num_agents, device="cpu", actions=None):
+    def get_actions_and_values(self, x, pomdp, num_agents, device="cpu", actions=None):
         # x is combined observations
         upper_bound = x.shape[0]#batch size
         genActions = False
@@ -104,6 +110,9 @@ class MAPPO(nn.Module):
             actions = torch.zeros(num_agents).to(device)
             genActions = True
         hidden_all = self.feature_extractor(x / 255.0)#CHECK EACH SEPERATELY
+        # print(x.shape)
+        # print(hidden_all.shape)
+        # print(hidden_all[0].shape)
         #TODO Add param for parameter sharing
         for i in range(upper_bound):
             # NAN ISSUE
@@ -114,11 +123,16 @@ class MAPPO(nn.Module):
                 action = probs.sample()
                 actions[i] = action
         actions = actions.int()
-        return actions, probs.log_prob(actions), probs.entropy(), self.critic(hidden_all) #actions, logprobs, _, values 
-
+        if pomdp:
+            return actions, probs.log_prob(actions), probs.entropy(), self.critic(hidden_all) #actions, logprobs, _, values 
+        else:
+            return actions, probs.log_prob(actions), probs.entropy(), self.critic(hidden_all[0]) #actions, logprobs, _, values
+        
 if __name__ == "__main__":
     args = parse_args()
     pz = args.pz
+    if pz:
+        args.env_id = "simple_spread"
     exp_name = f"{args.exp_name}__{args.env_id}__{args.seed}__{int(time.time())}"
     """ALGO PARAMS"""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -142,8 +156,8 @@ if __name__ == "__main__":
 
     """ ENV SETUP """
     if pz:
-        env = pistonball_v6.parallel_env(
-            render_mode="None", continuous=False, max_cycles=num_steps
+        env = simple_spread_v3.parallel_env(
+            render_mode="None", continuous_actions=False, max_cycles=num_steps
         )
     else:
         env = load_meltingpot(args.env_id)
@@ -154,14 +168,11 @@ if __name__ == "__main__":
     env = resize_v1(env, frame_size[0], frame_size[1]) # resize 
     env = frame_stack_v1(env, stack_size=stack_size) # stack
 
-    if pz:
-        num_agents = 1
-        num_actions = env.action_space.n
-        observation_size = env.observation_space.shape
-    else:
-        num_agents = len(env.possible_agents)
-        num_actions = env.action_space(env.possible_agents[0]).n
-        observation_size = env.observation_space(env.possible_agents[0]).shape
+    num_agents = len(env.possible_agents)
+    num_actions = env.action_space(env.possible_agents[0]).n
+    observation_size = env.observation_space(env.possible_agents[0]).shape
+
+    agent_rewards = np.zeros(num_agents)
 
     """ LEARNER SETUP """
     mappo = MAPPO(num_actions=num_actions).to(device)
@@ -171,8 +182,8 @@ if __name__ == "__main__":
     end_step = 0
     total_episodic_return = 0
     current_best = 0
-    chekpoint_window = args.chekpoint_window
-    window_episodic_return = np.zeros(chekpoint_window)
+    checkpoint_window = args.checkpoint_window
+    window_episodic_return = np.zeros(checkpoint_window)
     # replay buffer
     '''
     if mpot:
@@ -220,7 +231,7 @@ if __name__ == "__main__":
                 # rollover the observation
                 obs = batchify_obs(next_obs, device) # for torch 
                 # get action from the agent
-                actions, logprobs, _, values = mappo.get_actions_and_values(obs, num_agents, device)
+                actions, logprobs, _, values = mappo.get_actions_and_values(obs, args.pomdp, num_agents, device)
                 # execute the environment and log data
                 next_obs, rewards, terms, truncs, infos = env.step(
                     unbatchify(actions, env) # info has vector reward
@@ -288,7 +299,7 @@ if __name__ == "__main__":
                 end = start + args.batch_size
                 batch_index = b_index[start:end]#shuffled
                 _, newlogprob, entropy, values = mappo.get_actions_and_values(
-                    b_obs[batch_index], num_agents, device, b_actions.long()[batch_index]
+                    b_obs[batch_index], args.pomdp, num_agents, device, b_actions.long()[batch_index]
                 )
                 logratio = newlogprob - b_logprobs[batch_index]
                 ratio = logratio.exp() #divergence
@@ -344,7 +355,7 @@ if __name__ == "__main__":
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
-        if(update > chekpoint_window):
+        if(update > checkpoint_window):
             window_episodic_return = np.delete(window_episodic_return,0)
             window_episodic_return = np.append(window_episodic_return, total_episodic_return)
         else:
@@ -358,6 +369,9 @@ if __name__ == "__main__":
             print("SAVE")
 
         print(f"Mean Episodic Return: {np.mean(total_episodic_return)}")
+        print(f"All Episodic Return: {total_episodic_return}")
+        for i in range(len(total_episodic_return)):
+            writer.add_scalar("agent"+str(i)+"/episodic_return",total_episodic_return[i], step_count)
         writer.add_scalar("mean_episodic_return",np.mean(total_episodic_return), step_count)
         print(f"Step Count: {step_count}")
         print(f"Episode Length: {end_step}")
@@ -390,7 +404,7 @@ if __name__ == "__main__":
             terms = [False]
             truncs = [False]
             while not any(terms) and not any(truncs):
-                actions, logprobs, _, values = agent.get_actions_and_values(obs, num_agents, device)
+                actions, logprobs, _, values = agent.get_actions_and_values(obs, args.pomdp, num_agents, device)
                 obs, rewards, terms, truncs, infos = env.step(unbatchify(actions, env))
                 obs = batchify_obs(obs, device)
                 terms = [terms[a] for a in terms]
