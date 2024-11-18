@@ -58,7 +58,7 @@ setuptools.setup(
         'absl-py',
         'chex',
         'dm_env',
-        # 'dmlab2d',  # Not yet available for PIP install.
+        'dmlab2d',  # TODO CHECK
         'immutabledict',
         'ml-collections',
         'networkx',
@@ -68,7 +68,9 @@ setuptools.setup(
         'tensorflow-macos' if IS_M1_MAC else 'tensorflow',
         'shimmy',
         'pymunk',
-        'tyro'
+        'tyro',
+        'cleanrl',
+        'wandb',
     ],
     extras_require={
         # Dependencies required for rllib example.
